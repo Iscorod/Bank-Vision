@@ -113,3 +113,39 @@ Licencia de demostración: uso personal y de portfolio. Sin logotipos ni informa
 - Identidad BankVision actualizada: símbolo bancario con barras de crecimiento, sin iniciales «BV»; logotipo y favicon nuevos.
 - Barra lateral: nombre en vertical sin recortes, y scroll en alturas de pantalla pequeñas.
 - Dispersión «Productividad vs. eficiencia»: zoom a los rangos de datos, eje Y en k€ (no %), y detalles al pasar el cursor o utilizar Tab, evitando solapamientos permanentes.
+
+
+## Auditoría de conciliación — versión 3
+
+Tras la revisión de Visión ejecutiva 2024, Región Norte, se han aplicado estas correcciones **a la web** (no al Excel original):
+
+- **PyG reconciliada en el gráfico principal:** ingresos brutos = intereses brutos + comisiones brutas + otros ingresos; costes = financiación + comisiones pagadas + explotación + deterioros + impuestos. Diferencia = beneficio neto, mes a mes. El gráfico muestra flujos **mensuales**, no acumulados.
+- **Ingresos de red:** las oficinas suman los mismos ingresos brutos que la PyG en cada mes y región. Se comprobó la conciliación; antes se comparaban indebidamente con el margen bruto después de financiación.
+- **Eficiencia bancaria vs. gasto comercial local:** el 46,78 % regional es gasto de explotación / margen bruto; el ~12,2 % de las oficinas es gasto comercial local / ingreso bruto de oficina. Se han separado nombres y notas; **no son medidas equivalentes**.
+- **Márgenes:** margen financiero = intereses netos; margen bruto = margen financiero + comisiones netas + otros; margen neto = margen bruto − explotación; beneficio neto = margen neto − deterioro − impuestos.
+- **Scatter de riesgo:** muestra ROE negativo en la escala y marca estos segmentos en rojo; los puntos no se sustituyen por 0. Ticks de los ejes redondeados y etiquetas mediante tooltip para evitar solapes.
+- **Productos:** muestra todos los productos con saldos positivos en tres grupos (créditos, depósitos e inversiones) con la suma de cada grupo, conciliada con su KPI.
+- **KPIs sin histórico:** se sustituyeron las etiquetas incorrectas de “Variación anual” por la definición o el contexto del indicador. Solo aparece la variación cuando existe comparativo.
+- **Saldos frente a flujos:** “Créditos concedidos” y “Depósitos captados” en el resumen se han sustituido por “Créditos en cartera” y “Depósitos a cierre”. Para el año completo, el ROA se etiqueta como ejercicio calculado con activos a cierre, no anualizado.
+- **Provisiones/dudosos:** se etiqueta como **proxy**, porque la base no contiene la provisión Stage 3 específica. Por tanto no constituye una cobertura NPL regulatoria verificable.
+
+### Controles automáticos
+
+```bash
+node scripts/audit_financial.cjs
+node scripts/test_logic.cjs
+python scripts/verify_data.py
+```
+
+El test `audit_financial.cjs` contiene 300 conciliaciones de región × mes × tipo: beneficio = ingresos brutos − costes; suma del ingreso de oficinas = ingreso bruto financiero; y sumas por producto para créditos, depósitos e inversiones.
+
+### Limitaciones que permanecen en los datos simulados
+
+**Estos aspectos deben corregirse regenerando el Excel y los JSON de origen; no se han alterado los datos para que el dashboard parezca más realista:**
+
+1. La generación de ingresos/activos, productividad, ratio de gasto local y satisfacción por oficina resulta excesivamente homogénea. Aunque las sumas concilian, falta variabilidad orgánica por tamaño, mezcla de productos, ocupación y costes.
+2. En 2024 Norte, Banca Privada e Institucional presentan ROE negativos y ratios de eficiencia extraordinariamente altos. Ahora se muestran correctamente como negativos, pero es recomendable recalibrar la simulación financiera de estos segmentos antes de mostrarla como ejemplo representativo de banca.
+3. La relación entre provisiones **totales** y créditos dudosos es del 145,82 % en Norte. No implica necesariamente una cobertura regulatoria de Stage 3 y exige detalle específico de provisiones por fase para usar esa denominación.
+4. No existe histórico completo 2023 para ROE, ROA, CET1, eficiencia, ingresos y activos: no se deben fabricar variaciones YoY.
+
+**Cifras validadas Región Norte (2024):** ingresos brutos 1.050,30 M€; margen financiero 412,72 M€; margen bruto 582,19 M€; gasto de explotación 272,36 M€; margen neto 309,83 M€; beneficio neto 179,22 M€; créditos 16.207,20 M€ y depósitos 21.246,74 M€.
