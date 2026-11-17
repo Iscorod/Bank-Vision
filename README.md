@@ -106,3 +106,10 @@ python scripts/verify_data.py
 ```
 
 Licencia de demostración: uso personal y de portfolio. Sin logotipos ni información financiera de entidades reales.
+
+
+## Mejoras de interfaz (noviembre 2026)
+
+- Identidad BankVision actualizada: símbolo bancario con barras de crecimiento, sin iniciales «BV»; logotipo y favicon nuevos.
+- Barra lateral: nombre en vertical sin recortes, y scroll en alturas de pantalla pequeñas.
+- Dispersión «Productividad vs. eficiencia»: zoom a los rangos de datos, eje Y en k€ (no %), y detalles al pasar el cursor o utilizar Tab, evitando solapamientos permanentes.

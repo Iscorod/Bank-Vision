@@ -215,21 +215,34 @@ function barChart(labels,series,opts={}){
 function labAt(labels,i){return labels[i]||''}
 function scatter(points,opts={}){
  const nums=points.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));if(!nums.length)return '<div class="empty">Sin datos</div>';
- const W=640,H=226,L=54,R=22,T=19,B=39,iw=W-L-R,ih=H-T-B;
- const xs=nums.map(p=>p.x),ys=nums.map(p=>p.y);
- const x0=opts.xMin??Math.max(0,Math.min(...xs)-Math.max(...xs)*.12),x1=opts.xMax??Math.max(...xs)*1.12;
- const y0=opts.yMin??Math.max(0,Math.min(...ys)-Math.max(...ys)*.12),y1=opts.yMax??Math.max(...ys)*1.12;
+ const W=640,H=250,L=65,R=22,T=22,B=45,iw=W-L-R,ih=H-T-B;
+ const xs=nums.map(p=>p.x),ys=nums.map(p=>p.y),xFmt=opts.xFmt||fmtPct,yFmt=opts.yFmt||fmtPct;
+ // Zoom around the observed data range, rather than anchoring both axes at zero.
+ // This preserves the original values but makes close offices visibly distinguishable.
+ const domain=values=>{
+  const low=Math.min(...values),high=Math.max(...values),span=Math.max(high-low,Math.abs(high)*.006,0.0001);
+  return [Math.max(0,low-span*.28),high+span*.28];
+ };
+ const [ax0,ax1]=domain(xs),[ay0,ay1]=domain(ys);
+ const x0=opts.xMin??ax0,x1=opts.xMax??ax1,y0=opts.yMin??ay0,y1=opts.yMax??ay1;
  const xx=x=>L+(x-x0)/Math.max(1e-8,x1-x0)*iw,yy=y=>T+ih-(y-y0)/Math.max(1e-8,y1-y0)*ih;
- let out=`<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${safe(opts.aria||'Gráfico de dispersión')}">`;
+ let out=`<div class="chart-wrap scatter-wrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${safe(opts.aria||'Gráfico de dispersión. Acerca el puntero o usa Tab sobre un punto para ver sus datos.')}">`;
  for(let i=0;i<=4;i++){
   const x=L+i*iw/4,y=T+i*ih/4;
-  out+=`<path class="chart-grid" d="M${x} ${T}V${T+ih}M${L} ${y}H${L+iw}"/><text class="chart-ticks" text-anchor="middle" x="${x}" y="${H-20}">${safe(fmtPct(x0+(x1-x0)*i/4))}</text><text class="chart-ticks" text-anchor="end" x="${L-8}" y="${y+3}">${safe(fmtPct(y1-(y1-y0)*i/4))}</text>`;
+  out+=`<path class="chart-grid" d="M${x} ${T}V${T+ih}M${L} ${y}H${L+iw}"/><text class="chart-ticks" text-anchor="middle" x="${x}" y="${H-24}">${safe(xFmt(x0+(x1-x0)*i/4))}</text><text class="chart-ticks" text-anchor="end" x="${L-9}" y="${y+4}">${safe(yFmt(y1-(y1-y0)*i/4))}</text>`;
  }
+ // Draw unlabeled dots. The readable detail card only appears on hover or keyboard focus.
  for(let i=0;i<nums.length;i++){
-  const p=nums[i],x=xx(p.x),y=yy(p.y),col=p.color||COLORS[i%COLORS.length];let tx=clamp(x+9,L,W-100),ty=clamp(y-10,T+12,H-B-4);
-  out+=`<circle cx="${x}" cy="${y}" r="6" fill="${col}" stroke="#fff" stroke-width="2" ${p.segment?`data-segment="${p.segment}"`:''}><title>${safe(p.label)} · X ${fmtPct(p.x)} · Y ${fmtPct(p.y)}</title></circle><text class="chart-label" x="${tx}" y="${ty}">${safe(p.label)}</text>`
+  const p=nums[i],x=xx(p.x),y=yy(p.y),col=p.color||COLORS[i%COLORS.length];
+  const tooltipW=167,tooltipH=43;
+  const bx=clamp(x+16,L+3,W-R-tooltipW-2),by=clamp(y-tooltipH-13,T+3,T+ih-tooltipH-2);
+  const detail=`${xFmt(p.x)}  ·  ${yFmt(p.y)}`;
+  out+=`<g class="scatter-dot" tabindex="0" role="img" aria-label="${safe(p.label)}: ${safe(detail)}" ${p.segment?`data-segment="${safe(p.segment)}"`:''}>
+     <circle cx="${x}" cy="${y}" r="7" fill="${col}" stroke="#fff" stroke-width="2.4"/>
+     <g class="scatter-detail"><rect x="${bx}" y="${by}" width="${tooltipW}" height="${tooltipH}" rx="9" fill="#122e56"/><text class="scatter-detail-title" x="${bx+11}" y="${by+17}">${safe(p.label)}</text><text class="scatter-detail-value" x="${bx+11}" y="${by+32}">${safe(detail)}</text></g>
+    </g>`;
  }
- out+=`<text x="${W/2}" y="${H-3}" text-anchor="middle" class="chart-ticks">${safe(opts.xLabel||'Eje X (%)')}</text><text x="12" y="${H/2}" text-anchor="middle" class="chart-ticks" transform="rotate(-90 12 ${H/2})">${safe(opts.yLabel||'Eje Y (%)')}</text></svg></div>`;
+ out+=`<text x="${W/2}" y="${H-4}" text-anchor="middle" class="chart-ticks">${safe(opts.xLabel||'Eje X (%)')}</text><text x="15" y="${T+ih/2}" text-anchor="middle" class="chart-ticks" transform="rotate(-90 15 ${T+ih/2})">${safe(opts.yLabel||'Eje Y (%)')}</text></svg></div>`;
  return out
 }
 function waterfall(start,parts,opts={}){
@@ -484,7 +497,7 @@ function officesPage(ctx){
  ${panel('Distribución territorial de la red','Número de oficinas por región',regionTiles,{icon:'map',foot:'Selecciona una región para filtrar el cuadro de mando.'})}
  ${panel('Créditos y depósitos por región','Saldos bancarios al cierre (M€)',barChart(regions.map(id=>F.regions.get(id)?.[1]||''),[{name:'Créditos',values:regionCredit,color:'#0b64d2'},{name:'Depósitos',values:regionDeposit,color:'#15b9d0'}],{tickFmt:fmtInt}),{icon:'coins'})}
  ${panel('Productividad por oficina y trimestre','Ingresos comerciales por gestor (k€)',customHeat,{icon:'table'})}
- ${panel('Productividad vs. eficiencia','Ingreso por gestor (k€) y gastos / ingresos (%)',scatter(scatterPoints,{xLabel:'Coste / ingresos (%)',yLabel:'Productividad (k€)'}),{icon:'scatter'})}
+ ${panel('Productividad vs. eficiencia','Ingreso por gestor (k€) y gastos / ingresos (%)',scatter(scatterPoints,{xLabel:'Coste / ingresos (%)',yLabel:'Productividad (k€)',yFmt:v=>fmt1(v)+' k€'}),{icon:'scatter',foot:'Vista ampliada para distinguir oficinas próximas. Pasa el cursor por un punto o usa Tab para ver su nombre y sus cifras.'})}
  ${panel('Detalle de las principales oficinas','Indicadores de gestión y satisfacción',renderOfficeTable(ctx,10),{icon:'building',foot:'Clic sobre una oficina para filtrar todas las vistas compatibles.'})}
  </div>`
 }
@@ -515,7 +528,7 @@ function render(){
  if(!state.ready)return;
  const ctx=getCtx();lastContext=ctx;
  const menu=PAGES.map(p=>`<button type="button" class="side-item ${state.page===p.id?'active':''}" data-page="${p.id}" title="${safe(p.label)}" aria-label="${safe(p.label)}" ${state.page===p.id?'aria-current="page"':''}>${icon(p.icon)}</button>`).join('');
- $('#app').innerHTML=`<div class="app-shell"><aside class="sidebar" aria-label="Navegación principal"><div class="side-brand" aria-label="BankVision">B<span>V</span></div><nav class="side-nav">${menu}</nav><div class="sidebar-bottom"><div class="side-mini">BANKVISION · 2024</div></div></aside><main class="main">
+ $('#app').innerHTML=`<div class="app-shell"><aside class="sidebar" aria-label="Navegación principal"><button class="side-brand" type="button" data-page="executive" title="BankVision · Ir al inicio" aria-label="BankVision · Ir al inicio"><img src="assets/bankvision-mark.png" alt="" width="42" height="42" /></button><nav class="side-nav">${menu}</nav><div class="sidebar-bottom"><div class="side-mini">BANKVISION</div></div></aside><main class="main">
  <header class="header"><div class="heading"><span class="heading-mark">${icon('chart','icon-lg')}</span><div><h1>Panel de Control Financiero Bancario</h1><p>${safe(breadcrumb())} <span class="muted">· Ejercicio 2024</span></p></div></div><div class="top-right"><span class="simulation-pill"><span class="sim-dot"></span> Datos 100 % simulados</span><span class="update-pill">${icon('calendar','icon-sm')} Corte: ${safe(MONTHS[ctx.month-1])} 2024</span><button class="icon-btn" type="button" data-action="reset" title="Restablecer filtros">${icon('refresh','icon-sm')} Restablecer</button><button class="icon-btn" type="button" data-action="csv" title="Exportar datos filtrados">${icon('download','icon-sm')} CSV</button></div></header>
  ${renderPageTabs()}${renderFilters()}${filterScope()}<div class="section-eyebrow">VISIÓN ANALÍTICA <span></span> ${safe(breadcrumb().toUpperCase())}</div>
  ${PAGE_RENDERERS[state.page](ctx)}
