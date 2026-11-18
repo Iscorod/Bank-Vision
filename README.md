@@ -2,6 +2,31 @@
 
 Aplicación web estática con **seis pestañas interactivas**, basada en el modelo bancario sintético de 2024 (300.053 registros en el archivo Excel original). Preparada para Vercel, GitHub Pages o cualquier alojamiento estático HTTPS.
 
+## Novedades de interfaz · BankVision v5 (noviembre de 2026)
+
+Esta entrega es una **actualización de presentación sobre la base de datos v4**; no modifica ni vuelve a simular los saldos, flujos, clientes o controles.
+
+- **Cartera por producto, conciliada:** selector local `Tipo` con Créditos, Depósitos, Inversiones, Servicios y Ver todos. El segundo selector permite mostrar un producto concreto de la categoría. Por defecto, la tarjeta abre solo Créditos; «Ver todos» conserva los cuatro bloques en un área con **scroll interno** (no agranda indefinidamente la fila). La escala de saldos sigue siendo común entre créditos, depósitos e inversiones. Los servicios utilizan otra escala porque son flujos de comisiones.
+- **Integridad de los subtotales:** al seleccionar todo el bloque se muestra su conciliación; al escoger un producto individual se muestran su importe y participación sobre el total, sin afirmar falsamente que esa selección concilia con el total.
+- **Embudo comercial:** ocupa la altura útil de su tarjeta, con cuatro fases grandes, conversiones por etapa y **conversión global leads → captados**.
+- **Desempeño de oficinas:** tabla expandida con scroll interior y encabezados fijos; ordenación por ingresos, activos, productividad o satisfacción; selector de **Top 5 / Top 10 / Todas**. Al hacer clic en una fila sigue funcionando el filtro global de oficina.
+- **Controles locales vs. filtros globales:** los nuevos selectores de cartera y ranking afectan únicamente a sus respectivas tarjetas. Los filtros generales del informe siguen actuando sobre los KPI y demás visualizaciones; «Restablecer» recupera también las selecciones locales iniciales.
+- **Responsive:** adaptación de controles y del embudo a pantallas pequeñas. Se mantiene la exportación CSV existente.
+
+### Verificación de la v5
+
+```bash
+node --check app.js
+node scripts/test_render_v5.cjs
+node scripts/test_logic.cjs
+node scripts/audit_financial.cjs
+node scripts/audit_branch_v4.cjs
+```
+
+Los tests de código confirman el render de las seis pestañas y las cinco categorías, la selección de producto y las variantes de ordenación y Top N; la conciliación del Excel calibrado no se ve afectada. La prueba de captura con navegador integrado no fue posible por restricciones de acceso local del entorno: conviene verificar visualmente escritorio y móvil después de subirlo a Vercel.
+
+---
+
 ## Novedades auditadas · BankVision v4 (noviembre de 2026)
 
 Esta versión mantiene las seis pestañas de la v3 y añade **calibración heterogénea de oficinas**. 
@@ -27,7 +52,7 @@ python scripts/build_data.py /ruta/al/modelo_bancario_300k_powerbi_2024.xlsx
 python scripts/calibrate_offices_v4.py
 node scripts/audit_financial.cjs
 node scripts/audit_branch_v4.cjs
-node scripts/test_render_v4.cjs
+node scripts/test_render_v5.cjs
 ```
 
 El calibrador se debe ejecutar una sola vez, inmediatamente después de regenerar los JSON originales; evita una segunda recalibración sobre datos ya ajustados.
@@ -56,7 +81,7 @@ Filtros de periodo (año / trimestre / mes), región, oficina, segmento, product
 Este proyecto **no requiere `npm install` ni compilación**.
 
 ```bash
-cd banking-dashboard-vercel
+cd bankvision-v5
 python -m http.server 8000
 ```
 
@@ -76,7 +101,7 @@ Abre `http://localhost:8000` desde tu navegador. No abras `index.html` mediante 
 
 ```bash
 npm install -g vercel
-cd banking-dashboard-vercel
+cd bankvision-v5
 vercel login
 vercel --prod
 ```

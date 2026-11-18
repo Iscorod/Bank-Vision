@@ -29,3 +29,47 @@
 .scatter-key-marker{height:17px;width:17px;flex:0 0 17px;border-radius:50%;display:grid;place-items:center;color:white;font-size:9px}
 .product-scale-note{color:#6c82a0;font-size:10px;line-height:1.4;margin:0 0 7px}
 @media(max-width:650px){.scatter-key{grid-template-columns:1fr}.scatter-key-item small{margin-left:auto}}
+
+
+/* v5: executive view — compact product filter and full-height commercial analysis. */
+.product-panel{align-self:stretch}
+.product-panel .panel-head{margin-bottom:8px}
+.product-chart-layout{display:flex;flex-direction:column;gap:9px;min-height:0}
+.product-controls{display:grid;grid-template-columns:minmax(0,0.85fr) minmax(0,1.15fr);gap:8px;align-items:end}
+.product-filter{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:10px;color:#536e8a;font-weight:800}
+.product-filter-select,.office-table-controls select{width:100%;min-width:0;max-width:100%;border:1px solid #cddfee;background:#f9fcff;color:#15375d;padding:8px 25px 8px 9px;border-radius:9px;font-size:11px;font-weight:700;outline-offset:2px}
+.product-filter-select:focus-visible,.office-table-controls select:focus-visible{outline:2px solid #1887e1;border-color:#1887e1}
+.product-scroll-region{min-height:185px;max-height:250px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#b9d4e9 transparent;padding-right:5px;border-bottom:1px solid #edf3f9}
+.product-scroll-region:focus-visible{outline:2px solid #54a8e8;border-radius:5px}
+.product-breakdowns{gap:12px}
+.product-section{padding-bottom:9px}
+.product-section .bar-list{padding-top:3px;padding-bottom:3px}
+.product-chart-footer{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;color:#7d8fa7}
+.product-chart-footer svg{color:#4c8bca}
+.product-empty{min-height:100px;display:grid;place-items:center;text-align:center;font-weight:700;font-size:11px;color:#7d8fa7}
+.executive-funnel-panel,.executive-office-panel{display:flex;flex-direction:column;min-height:395px}
+.executive-funnel-panel .panel-body,.executive-office-panel .panel-body{display:flex;flex-direction:column;flex:1;min-height:0}
+.executive-funnel-panel .panel-body>.funnel-layout{flex:1}
+.funnel-layout.funnel-expanded{display:flex;flex-direction:column;min-height:300px;gap:12px}
+.funnel-expanded .funnel-body{flex:1;display:grid;grid-template-columns:minmax(0,56%) minmax(0,1fr);gap:14px;min-height:255px;padding:3px 0;align-items:stretch}
+.funnel-expanded .funnel-shapes{display:grid;grid-template-rows:repeat(4,minmax(0,1fr));gap:7px;padding-top:0;align-items:stretch}
+.funnel-expanded .funnel-stage{height:100%;min-height:48px;max-height:none;font-size:clamp(14px,1.2vw,18px)}
+.funnel-expanded .funnel-steps{display:grid;grid-template-rows:repeat(4,minmax(0,1fr));gap:7px}
+.funnel-expanded .funnel-step{grid-template-columns:8px minmax(0,1fr);gap:2px 7px;align-content:center;padding:3px 0;font-size:11px}
+.funnel-expanded .funnel-step b{grid-column:2;grid-row:2;justify-self:start;font-size:clamp(12px,1.05vw,16px)}
+.funnel-expanded .funnel-step small{grid-column:2;text-align:left;font-size:10px;white-space:normal}
+.funnel-conversion-total{display:flex;align-items:center;justify-content:space-between;gap:8px;background:linear-gradient(95deg,#effaf9,#eff5ff);padding:11px 13px;border:1px solid #d6ecf2;border-radius:10px}
+.funnel-conversion-total span{color:#486783;font-size:11px;font-weight:700}
+.funnel-conversion-total strong{font-family:Manrope,sans-serif;font-size:17px;color:#087cb7;white-space:nowrap}
+.executive-office-layout{display:flex;flex:1;flex-direction:column;gap:9px;min-height:0}
+.office-table-controls{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:8px}
+.office-table-controls label{display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:800;color:#56718c;min-width:0}
+.executive-office-layout .tbl-wrap{flex:1;max-height:322px;min-height:225px;overflow:auto;border:1px solid #e1ebf7;border-radius:9px}
+.executive-office-layout .data-table{min-width:630px;font-size:10px}
+.executive-office-layout .data-table th{position:sticky;top:0;background:#eaf2fb;z-index:3}
+.executive-office-layout .data-table th,.executive-office-layout .data-table td{padding:12px 10px}
+.office-table-status{display:flex;align-items:center;gap:6px;color:#7189a2;font-size:10px;font-weight:700}
+.office-table-status svg{color:#3678b8;flex:none}
+@media(max-width:1160px){.executive-funnel-panel,.executive-office-panel{min-height:370px}.product-scroll-region{max-height:260px}}
+@media(max-width:790px){.executive-funnel-panel,.executive-office-panel{min-height:390px}.product-scroll-region{max-height:330px}}
+@media(max-width:430px){.product-controls{grid-template-columns:1fr}.funnel-expanded .funnel-body{grid-template-columns:52% minmax(0,1fr);gap:8px}.funnel-expanded .funnel-step{font-size:10px}.funnel-expanded .funnel-step b{font-size:12px}.funnel-conversion-total strong{font-size:15px}}

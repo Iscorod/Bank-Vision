@@ -61,7 +61,7 @@ const total=(rs,fn)=>rs.reduce((a,r)=>a+fn(r),0);
 const ratio=(a,b,mult=100)=>b? a/b*mult:NaN;
 const pctDelta=(curr,prev)=>prev?(curr/prev-1)*100:NaN;
 const normalized=(t)=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-const state={page:'executive',period:'year',region:'all',office:'all',segment:'all',product:'all',channel:'all',ready:false,officeChunks:{}};
+const state={page:'executive',period:'year',region:'all',office:'all',segment:'all',product:'all',channel:'all',productGroup:'credits',productCardItem:'all',officeSort:'income',officeLimit:'10',ready:false,officeChunks:{}};
 const DATA={};const F={};let lastContext=null;
 async function json(path){const res=await fetch(`data/${path}`);if(!res.ok)throw new Error(`No se pudo cargar ${path} (${res.status})`);return res.json()}
 async function init(){
@@ -292,9 +292,10 @@ function waterfall(start,parts,opts={}){
  });
  return out+'</svg></div>'
 }
-function funnel(values){
+function funnel(values,opts={}){
  const names=['Leads generados','Contactados','Cualificados','Captados'],cols=['#0860d0','#13a9da','#26c9c8','#51cd78'];
- return `<div class="funnel-body"><div class="funnel-shapes">${values.map((v,i)=>`<div class="funnel-stage" style="background:${cols[i]}">${fmtInt(v)}</div>`).join('')}</div><div class="funnel-steps">${names.map((name,i)=>`<div class="funnel-step"><i style="background:${cols[i]}"></i><span class="funnel-name">${name}</span><b>${fmtInt(values[i])}</b>${i?`<small>${fmtPct(ratio(values[i],values[i-1]))} conversión</small>`:''}</div>`).join('')}</div></div>`
+ const detail=opts.expanded?`<div class="funnel-conversion-total"><span>Conversión total · leads a clientes</span><strong>${fmtPct(ratio(values.at(-1),values[0]))}</strong></div>`:'';
+ return `<div class="funnel-layout ${opts.expanded?'funnel-expanded':''}"><div class="funnel-body"><div class="funnel-shapes">${values.map((v,i)=>`<div class="funnel-stage" style="background:${cols[i]}">${fmtInt(v)}</div>`).join('')}</div><div class="funnel-steps">${names.map((name,i)=>`<div class="funnel-step"><i style="background:${cols[i]}"></i><span class="funnel-name">${name}</span><b>${fmtInt(values[i])}</b>${i?`<small>${fmtPct(ratio(values[i],values[i-1]))} conversión</small>`:'<small>Inicio del embudo</small>'}</div>`).join('')}</div></div>${detail}</div>`;
 }
 /* Reusable financial aggregations, all derived from the source Excel. */
 function group(rows, keyFn, valueFn){const g=new Map();for(const r of rows){const k=keyFn(r);g.set(k,(g.get(k)||0)+valueFn(r))}return g}
@@ -311,26 +312,51 @@ function productStats(ctx,measure='business'){
  return [...g].map(([id,value])=>({id,label:F.products.get(id)?.[1]||`Producto ${id}`,value})).sort((a,b)=>b.value-a.value)
 }
 function productBreakdown(ctx){
+ // These controls only change this chart: global filters and every other KPI remain intact.
  const sections=[
-  {title:'Cartera de créditos',field:'credits',total:ctx.stock.credits,color:'#075bd0'},
-  {title:'Depósitos de clientes',field:'deposits',total:ctx.stock.deposits,color:'#12b7c8'},
-  {title:'Inversiones administradas',field:'investments',total:ctx.stock.investments,color:'#49bd89'}
+  {id:'credits',title:'Cartera de créditos',field:'credits',total:ctx.stock.credits,color:'#075bd0',nature:'Credito'},
+  {id:'deposits',title:'Depósitos de clientes',field:'deposits',total:ctx.stock.deposits,color:'#12b7c8',nature:'Deposito'},
+  {id:'investments',title:'Inversiones administradas',field:'investments',total:ctx.stock.investments,color:'#49bd89',nature:'Inversion'},
+  {id:'services',title:'Servicios: comisiones netas',field:'fee',total:0,color:'#8b9aca',nature:'Servicio'}
  ];
- const allStocks=sections.flatMap(s=>productStats(ctx,s.field).filter(p=>p.value>0));
+ const itemsBySection=new Map(sections.map(section=>[section.id,productStats(ctx,section.field)
+  .filter(p=>F.products.get(p.id)?.[3]===section.nature && p.value>0.000001)]));
+ const serviceTotal=itemsBySection.get('services').reduce((t,p)=>t+p.value,0);
+ sections[3].total=serviceTotal;
+ const allStocks=sections.filter(x=>x.id!=='services').flatMap(section=>itemsBySection.get(section.id));
  const commonMax=Math.max(1,...allStocks.map(p=>p.value));
- const blocks=sections.map(section=>{
-  const items=productStats(ctx,section.field).filter(p=>p.value>0.000001);
-  if(!items.length)return '';
-  const visible=items.reduce((a,p)=>a+p.value,0),diff=visible-section.total;
-  return `<div class="product-section"><div class="product-section-head"><strong>${safe(section.title)}</strong><span>${fmtM(section.total,1)}</span></div>${horizontalBars(items.map(p=>({...p,product:p.id,color:section.color})),{format:v=>fmtM(v,1),maxValue:commonMax})}<div class="reconciliation ${Math.abs(diff)>0.1?'mismatch':''}">Σ productos: ${fmtM(visible,1)} ${Math.abs(diff)<=.1?'· conciliado':'· comprobar diferencia'}</div></div>`;
- });
- const serviceIds=new Set(DATA.meta.products.rows.filter(r=>r[3]==='Servicio').map(r=>r[0]));
- const services=productStats(ctx,'fee').filter(p=>serviceIds.has(p.id));
- if(state.product==='all'||serviceIds.has(Number(state.product))){
-  const active=services.filter(p=>p.value>0.00001);
-  blocks.push(`<div class="product-section"><div class="product-section-head"><strong>Servicios: comisiones netas</strong><span>${fmtM(services.reduce((t,p)=>t+p.value,0),1)} · flujo</span></div>${horizontalBars(active.map(p=>({...p,product:p.id,color:'#8b9aca'})),{format:v=>fmtM(v,1)})}<div class="reconciliation">${services.length} servicios sin saldo de cartera · importes acumulados del periodo</div></div>`);
- }
- return `<div class="product-breakdowns"><p class="product-scale-note">Escala común de saldos: 0 a ${fmtM(commonMax,0)} · barras comparables entre créditos, depósitos e inversiones. El bloque de servicios muestra flujos con otra escala.</p>${blocks.join('')}</div>`;
+ const groupIds=new Set(['all',...sections.map(s=>s.id)]);
+ const activeGroup=groupIds.has(state.productGroup)?state.productGroup:'credits';
+ const groups=activeGroup==='all'?sections:sections.filter(s=>s.id===activeGroup);
+ const catalog=groups.flatMap(s=>DATA.meta.products.rows.filter(p=>p[3]===s.nature));
+ const validItem=state.productCardItem==='all'||catalog.some(p=>String(p[0])===state.productCardItem);
+ const selectedItem=validItem?state.productCardItem:'all';
+ const groupOptions=[['credits','Créditos'],['deposits','Depósitos'],['investments','Inversiones'],['services','Servicios'],['all','Ver todos']];
+ const toolbar=`<div class="product-controls" aria-label="Filtros locales de cartera">
+   <label class="product-filter"><span>Tipo</span><select class="product-filter-select" data-local-filter="productGroup" aria-label="Tipo de producto en la cartera">${groupOptions.map(([id,name])=>`<option value="${id}" ${activeGroup===id?'selected':''}>${name}</option>`).join('')}</select></label>
+   <label class="product-filter"><span>Producto</span><select class="product-filter-select" data-local-filter="productCardItem" aria-label="Producto concreto en la cartera"><option value="all">Todos los productos</option>${catalog.map(p=>`<option value="${p[0]}" ${selectedItem===String(p[0])?'selected':''}>${safe(p[1])}</option>`).join('')}</select></label>
+ </div>`;
+ let visibleCount=0;
+ const blocks=groups.map(section=>{
+  const all=itemsBySection.get(section.id);
+  const shown=selectedItem==='all'?all:all.filter(p=>String(p.id)===selectedItem);
+  visibleCount+=shown.length;
+  if(!shown.length)return '';
+  const totalDisplayed=shown.reduce((a,p)=>a+p.value,0);
+  const isService=section.id==='services';
+  const recon=selectedItem==='all'
+    ? isService?`${all.length} servicios · flujo acumulado, sin saldo de cartera`
+       : `Σ productos: ${fmtM(totalDisplayed,1)} ${Math.abs(totalDisplayed-section.total)<=.1?'· conciliado':'· comprobar diferencia'}`
+    : `Producto seleccionado: ${fmtM(totalDisplayed,1)} (${fmtPct(ratio(totalDisplayed,section.total))} del bloque)`;
+  const mismatch=selectedItem==='all'&&!isService&&Math.abs(totalDisplayed-section.total)>.1;
+  return `<div class="product-section"><div class="product-section-head"><strong>${safe(section.title)}</strong><span>${fmtM(section.total,1)}${isService?' · flujo':''}</span></div>
+   ${horizontalBars(shown.map(p=>({...p,product:p.id,color:section.color})),{format:v=>fmtM(v,1),maxValue:isService?Math.max(1,...all.map(p=>p.value)):commonMax})}
+   <div class="reconciliation ${mismatch?'mismatch':''}">${recon}</div></div>`;
+ }).filter(Boolean);
+ const scaleText=activeGroup==='services'?'Comisiones netas acumuladas del periodo: los servicios no tienen saldo de cartera.':`Escala común de saldos: 0 a ${fmtM(commonMax,0)} · barras comparables entre créditos, depósitos e inversiones.`;
+ return `<div class="product-chart-layout">${toolbar}<div class="product-scroll-region" role="region" aria-label="Productos seleccionados" tabindex="0">
+   <p class="product-scale-note">${safe(scaleText)}</p><div class="product-breakdowns">${blocks.join('')||'<div class="product-empty">No hay importes para esta selección. Cambia el tipo o los filtros generales.</div>'}</div>
+   </div><div class="product-chart-footer">${icon('info','icon-sm')} <span>${activeGroup==='all'?'Vista de los cuatro bloques · desplázate para verlos':`${visibleCount} producto${visibleCount===1?'':'s'} visible${visibleCount===1?'':'s'} · selector local, no modifica los KPI`}</span></div></div>`;
 }
 function channelStats(ctx,field=6){const g=group(ctx.leadsFlows,r=>r[2],r=>r[field]);return [...g].map(([id,value])=>({id,label:F.channels.get(id)?.[1]||'Canal',value,channel:id})).sort((a,b)=>b.value-a.value)}
 function segmentMetrics(ctx){
@@ -364,9 +390,23 @@ function officeScores(ctx){
  return [...byOffice.values()].map(o=>({...o,name:F.offices.get(o.id)?.[2]||`Oficina ${o.id}`,city:F.offices.get(o.id)?.[3]||'',region:F.offices.get(o.id)?.[4]||0,productivity:o.managerMonths?o.income*1000/o.managerMonths:0,efficiency:ratio(o.cost,o.income),rating:o.surveys?o.satisfaction/o.surveys:NaN})).sort((a,b)=>b.income-a.income)
 }
 function renderOfficeTable(ctx,limit=6){
- const rank=officeScores(ctx).slice(0,limit),byOffice=group(ctx.officeClosing,r=>r[1],r=>r[7]);
+ const rank=officeScores(ctx).slice(0,limit);
  const rows=rank.map(o=>({office:o.id,cells:[o.name,fmtM(o.assets),fmtM(o.income,1),fmtInt(o.managers),fmtK(o.productivity),fmtPct(o.efficiency),`${fmt1(o.rating)} / 10`]}));
  return simpleTable(['Oficina','Activos','Ingresos brutos','Gestores (cierre)','Prod. por gestor-mes','Gasto local / ingresos','Satisfacción'],rows)
+}
+function renderExecutiveOfficeTable(ctx){
+ const order={income:'Ingresos brutos',assets:'Activos',productivity:'Productividad',rating:'Satisfacción'};
+ const selectedSort=Object.hasOwn(order,state.officeSort)?state.officeSort:'income';
+ const selectedLimit=['5','10','all'].includes(state.officeLimit)?state.officeLimit:'10';
+ const scores=officeScores(ctx).sort((a,b)=>(b[selectedSort]-a[selectedSort])||(b.income-a.income));
+ const displayed=selectedLimit==='all'?scores:scores.slice(0,Number(selectedLimit));
+ const controls=`<div class="office-table-controls">
+  <label>Ordenar por <select data-local-filter="officeSort" aria-label="Ordenar oficinas">${Object.entries(order).map(([key,label])=>`<option value="${key}" ${selectedSort===key?'selected':''}>${label}</option>`).join('')}</select></label>
+  <label>Mostrar <select data-local-filter="officeLimit" aria-label="Número de oficinas"><option value="5" ${selectedLimit==='5'?'selected':''}>Top 5</option><option value="10" ${selectedLimit==='10'?'selected':''}>Top 10</option><option value="all" ${selectedLimit==='all'?'selected':''}>Todas</option></select></label>
+ </div>`;
+ const rows=displayed.map(o=>({office:o.id,cells:[o.name,fmtM(o.assets),fmtM(o.income,1),fmtInt(o.managers),fmtK(o.productivity),fmtPct(o.efficiency),`${fmt1(o.rating)} / 10`]}));
+ const table=simpleTable(['Oficina','Activos','Ingresos brutos','Gestores (cierre)','Prod. / gestor-mes','Gasto local / ingresos','Satisfacción'],rows);
+ return `<div class="executive-office-layout">${controls}${table}<div class="office-table-status">${icon('info','icon-sm')} Mostrando ${fmtInt(displayed.length)} de ${fmtInt(scores.length)} oficinas · selecciona una fila para filtrar</div></div>`;
 }
 function firstKpi(ctx){const assets=sum(ctx.officeClosing,7),s=ctx.stock;
  return [
@@ -395,8 +435,8 @@ function execPage(ctx){
  ${panel('Cartera por producto, conciliada','Detalle completo de créditos, depósitos e inversiones a cierre (M€)',volume,{icon:'layers',class:'product-panel'})}
  ${panel('Mix de captación por canal','Distribución de clientes captados durante el periodo',donut(channels,{center:fmtInt(ctx.leads.captured),subtitle:'Captaciones'}),{icon:'pie'})}
  ${panel('Rentabilidad vs. riesgo por segmento',ctx.months.length===12?'ROE del ejercicio frente a ratio de mora':'ROE anualizado estimado frente a ratio de mora',scatter(segs.map((s,i)=>({x:s.risk,y:s.roe,label:s.label,segment:s.id,color:COLORS[i]})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)),{xLabel:'Ratio de mora (%)',yLabel:'ROE (%)'}),{icon:'scatter',foot:`ROE global ${fmtPct(ctx.roe)} = beneficio total / patrimonio total. Se pondera por capital asignado, no por media simple; dos segmentos pueden coincidir en riesgo y rentabilidad.`})}
- ${panel('Embudo comercial','De leads a captaciones: volumen y conversión',funnel([l.leads,l.contacted,l.qualified,l.captured]),{icon:'filter'})}
- ${panel('Desempeño de oficinas','Ingresos brutos y gasto comercial local por oficina',renderOfficeTable(ctx),{icon:'building',foot:'El gasto comercial local es solo una parte de los gastos totales. Su ratio no es la eficiencia bancaria de la PyG.'})}
+ ${panel('Embudo comercial','De leads a captaciones: volumen y conversión',funnel([l.leads,l.contacted,l.qualified,l.captured],{expanded:true}),{icon:'filter',class:'executive-funnel-panel'})}
+ ${panel('Desempeño de oficinas','Ingresos brutos y gasto comercial local por oficina',renderExecutiveOfficeTable(ctx),{icon:'building',class:'executive-office-panel',foot:'El gasto local es una parte de los costes, no el ratio de eficiencia bancaria de la PyG.'})}
  ${panel('Claves del periodo','Lectura ejecutiva de los principales indicadores',`<div class="insights">${notices.map(x=>`<div class="insight-item">${icon('check','icon icon-sm')}<span>${safe(x)}</span></div>`).join('')}</div>`,{class:'full story-card',icon:'spark'})}
  </div>`
 }
@@ -582,7 +622,7 @@ function render(){
  <header class="header"><div class="heading"><span class="heading-mark">${icon('chart','icon-lg')}</span><div><h1>Panel de Control Financiero Bancario</h1><p>${safe(breadcrumb())} <span class="muted">· Ejercicio 2024</span></p></div></div><div class="top-right"><span class="simulation-pill"><span class="sim-dot"></span> Datos 100 % simulados</span><span class="update-pill">${icon('calendar','icon-sm')} Corte: ${safe(MONTHS[ctx.month-1])} 2024</span><button class="icon-btn" type="button" data-action="reset" title="Restablecer filtros">${icon('refresh','icon-sm')} Restablecer</button><button class="icon-btn" type="button" data-action="csv" title="Exportar datos filtrados">${icon('download','icon-sm')} CSV</button></div></header>
  ${renderPageTabs()}${renderFilters()}${filterScope()}<div class="section-eyebrow">VISIÓN ANALÍTICA <span></span> ${safe(breadcrumb().toUpperCase())}</div>
  ${PAGE_RENDERERS[state.page](ctx)}
- <footer class="footer"><span><strong>BankVision v4 / Banking Analytics</strong> · 300.053 registros originales + calibración de oficinas v4 · Importes en millones de euros salvo indicación</span><span>Datos sintéticos · 2024 · Diseñado para portfolio profesional</span></footer>
+ <footer class="footer"><span><strong>BankVision v5 / Banking Analytics</strong> · 300.053 registros originales + calibración de oficinas v4 · Importes en millones de euros salvo indicación</span><span>Datos sintéticos · 2024 · Diseñado para portfolio profesional</span></footer>
  </main></div>`;
  document.title=`BankVision · ${breadcrumb()}`;
 }
@@ -593,20 +633,29 @@ function exportCsv(){
  const txt='\uFEFF'+[head,...rows].map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\r\n');
  const url=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8;'}));const a=document.createElement('a');a.href=url;a.download=`bankvision_${state.page}_2024.csv`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);showToast(`Exportadas ${fmtInt(rows.length)} filas a CSV`)
 }
-function reset(){state.period='year';state.region='all';state.office='all';state.segment='all';state.product='all';state.channel='all';render();showToast('Filtros restablecidos')}
+function reset(){state.period='year';state.region='all';state.office='all';state.segment='all';state.product='all';state.channel='all';state.productGroup='credits';state.productCardItem='all';state.officeSort='income';state.officeLimit='10';render();showToast('Filtros restablecidos')}
 $('#app').addEventListener('click',async e=>{
  const nav=e.target.closest('[data-page]');if(nav){state.page=nav.dataset.page;render();window.scrollTo({top:0,behavior:'smooth'});return}
  const action=e.target.closest('[data-action]');if(action){if(action.dataset.action==='reset')reset();else if(action.dataset.action==='csv')exportCsv();return}
- const product=e.target.closest('[data-product]');if(product){state.product=String(product.dataset.product);render();showToast('Producto filtrado');return}
+ const product=e.target.closest('[data-product]');if(product){state.product=String(product.dataset.product);const typ=F.products.get(Number(state.product))?.[3];state.productGroup=({Credito:'credits',Deposito:'deposits',Inversion:'investments',Servicio:'services'})[typ]||'credits';state.productCardItem='all';render();showToast('Producto filtrado');return}
  const channel=e.target.closest('[data-channel]');if(channel){state.channel=String(channel.dataset.channel);render();showToast('Canal filtrado');return}
  const segment=e.target.closest('[data-segment]');if(segment){state.segment=String(segment.dataset.segment);render();showToast('Segmento filtrado');return}
  const region=e.target.closest('[data-region]');if(region){state.region=String(region.dataset.region);state.office='all';render();showToast('Región filtrada');return}
  const office=e.target.closest('[data-office]');if(office){await selectOffice(String(office.dataset.office));showToast('Oficina filtrada');return}
 });
 $('#app').addEventListener('change',async e=>{
+ const local=e.target.closest('[data-local-filter]');
+ if(local){
+  const field=local.dataset.localFilter;
+  if(!['productGroup','productCardItem','officeSort','officeLimit'].includes(field))return;
+  state[field]=local.value;
+  if(field==='productGroup')state.productCardItem='all';
+  render();
+  return;
+ }
  const filter=e.target.closest('[data-filter]');if(!filter)return;
  const field=filter.dataset.filter,value=filter.value;
  if(field==='office'){await selectOffice(value);return}
- state[field]=value;if(field==='region')state.office='all';render();
+ state[field]=value;if(field==='region')state.office='all';if(field==='product'){const typ=F.products.get(Number(value))?.[3];state.productGroup=({Credito:'credits',Deposito:'deposits',Inversion:'investments',Servicio:'services'})[typ]||'credits';state.productCardItem='all';}render();
 });
 init();
