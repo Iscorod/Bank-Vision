@@ -74,14 +74,68 @@
 @media(max-width:790px){.executive-funnel-panel,.executive-office-panel{min-height:390px}.product-scroll-region{max-height:330px}}
 @media(max-width:430px){.product-controls{grid-template-columns:1fr}.funnel-expanded .funnel-body{grid-template-columns:52% minmax(0,1fr);gap:8px}.funnel-expanded .funnel-step{font-size:10px}.funnel-expanded .funnel-step b{font-size:12px}.funnel-conversion-total strong{font-size:15px}}
 
-/* BankVision v6 · embudo centrado de verdad, etapas y métricas alineadas */
-.executive-funnel-panel .panel-body{display:flex;flex-direction:column;justify-content:center;align-items:stretch;flex:1;min-height:0}
-.executive-funnel-panel .funnel-layout.funnel-expanded{display:flex;flex:0 0 auto;flex-direction:column;justify-content:center;width:100%;max-width:760px;min-height:0;margin:auto;gap:14px}
-.executive-funnel-panel .funnel-expanded .funnel-body{display:grid;flex:0 0 auto;grid-template-columns:minmax(0,54%) minmax(0,1fr);gap:14px;align-items:stretch;height:clamp(210px,18vw,260px);min-height:0;padding:0}
-.executive-funnel-panel .funnel-expanded .funnel-shapes,.executive-funnel-panel .funnel-expanded .funnel-steps{height:100%;display:grid;grid-template-rows:repeat(4,minmax(0,1fr));gap:7px;min-height:0;padding:0}
-.executive-funnel-panel .funnel-expanded .funnel-stage{height:100%;min-height:0;max-height:none;display:grid;place-items:center;font-size:clamp(13px,1.1vw,18px)}
-.executive-funnel-panel .funnel-expanded .funnel-step{align-self:stretch;align-content:center;min-height:0;grid-template-columns:9px minmax(0,1fr);gap:2px 7px;padding:0}
-.executive-funnel-panel .funnel-conversion-total{flex:0 0 auto}
+/* BankVision v8 · embudo a altura completa, sin centrar un bloque de altura fija.
+   La misma malla de cuatro filas controla trapecios y sus métricas. */
+.executive-funnel-panel .panel-head{flex:0 0 auto}
+.executive-funnel-panel .panel-body{
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+  justify-content:stretch;
+  align-items:stretch;
+  min-height:0;
+}
+.executive-funnel-panel .funnel-layout.funnel-expanded{
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+  justify-content:stretch;
+  width:100%;
+  max-width:none;
+  min-height:0;
+  margin:0;
+  gap:12px;
+}
+.executive-funnel-panel .funnel-expanded .funnel-body{
+  display:grid;
+  flex:1 1 0%;
+  grid-template-columns:minmax(0,54%) minmax(0,1fr);
+  gap:14px;
+  align-items:stretch;
+  height:auto;
+  min-height:0;
+  padding:0;
+}
+.executive-funnel-panel .funnel-expanded .funnel-shapes,
+.executive-funnel-panel .funnel-expanded .funnel-steps{
+  display:grid;
+  height:100%;
+  grid-template-rows:repeat(4,minmax(0,1fr));
+  gap:8px;
+  min-height:0;
+  padding:0;
+  align-items:stretch;
+}
+.executive-funnel-panel .funnel-expanded .funnel-stage{
+  display:grid;
+  place-items:center;
+  height:100%;
+  min-height:48px;
+  max-height:none;
+  font-size:clamp(13px,1.1vw,18px);
+}
+.executive-funnel-panel .funnel-expanded .funnel-step{
+  align-self:stretch;
+  align-content:center;
+  grid-template-columns:9px minmax(0,1fr);
+  gap:2px 7px;
+  min-height:0;
+  padding:0;
+}
+.executive-funnel-panel .funnel-conversion-total{
+  flex:0 0 auto;
+  min-height:48px;
+}
 /* Auditoría de ROE: capital que pondera cada punto y puente de márgenes visibles. */
 .finance-breakdown{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 14px}
 .finance-breakdown>div{display:flex;flex-direction:column;justify-content:center;gap:4px;background:#f8fbff;border:1px solid #dbeaf7;border-radius:10px;padding:10px 12px;min-width:0}
@@ -100,8 +154,8 @@
 .segment-details .data-table{font-size:9px;min-width:760px}
 .segment-details .data-table td,.segment-details .data-table th{padding:8px 6px}
 .segment-details-note{font-size:9px;line-height:1.5;color:#617c97;margin:8px 4px}
-@media(max-width:1160px){.finance-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}.executive-funnel-panel .funnel-expanded .funnel-body{height:clamp(210px,26vw,268px)}}
-@media(max-width:650px){.finance-breakdown{grid-template-columns:1fr 1fr;gap:7px}.finance-breakdown>div{padding:8px}.finance-breakdown strong{font-size:11px}.executive-funnel-panel .funnel-expanded .funnel-body{grid-template-columns:minmax(0,52%) minmax(0,1fr);gap:8px;height:clamp(210px,57vw,250px)}.executive-funnel-panel .funnel-expanded .funnel-stage{font-size:12px}.executive-funnel-panel .funnel-expanded .funnel-step{font-size:10px}.executive-funnel-panel .funnel-expanded .funnel-step b{font-size:12px}}
+@media(max-width:1160px){.finance-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.finance-breakdown{grid-template-columns:1fr 1fr;gap:7px}.finance-breakdown>div{padding:8px}.finance-breakdown strong{font-size:11px}.executive-funnel-panel .funnel-expanded .funnel-body{grid-template-columns:minmax(0,52%) minmax(0,1fr);gap:8px}.executive-funnel-panel .funnel-expanded .funnel-stage{font-size:12px}.executive-funnel-panel .funnel-expanded .funnel-step{font-size:10px}.executive-funnel-panel .funnel-expanded .funnel-step b{font-size:12px}}
 
 /* v7 · reconciled risk, fee margins, income attribution and real-size legend */
 .finance-breakdown{grid-template-columns:repeat(3,minmax(0,1fr))}

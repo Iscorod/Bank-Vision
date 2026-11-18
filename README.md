@@ -1,3 +1,7 @@
+# BankVision v8 — Embudo comercial a altura completa
+
+**Cambios respecto a v7:** se elimina el centrado vertical mediante `margin:auto` y la altura fija de 210–260 px del embudo ejecutivo. Las cuatro etapas se distribuyen en todo el alto utilizable del panel, alineadas con las métricas de la derecha; el resumen de conversión queda anclado a la parte inferior de la tarjeta. El tamaño se adapta al alto del panel en escritorio y móvil. No se han cambiado datos ni cálculos financieros.
+
 # BankVision v7 · Cuadro de mando financiero bancario
 
 **Proyecto web estático y responsive para Vercel con seis pestañas interactivas y datos completamente simulados de 2024.** Todos los importes son **M€**, salvo indicación en contrario. El sistema **no** contiene datos de una entidad financiera real. No requiere React, Node, build ni variables de entorno en producción: sirve `index.html` con `app.js`, `styles.css` y `data/*.json`.
