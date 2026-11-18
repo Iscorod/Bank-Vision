@@ -2,6 +2,42 @@
 
 Aplicación web estática con **seis pestañas interactivas**, basada en el modelo bancario sintético de 2024 (300.053 registros en el archivo Excel original). Preparada para Vercel, GitHub Pages o cualquier alojamiento estático HTTPS.
 
+## Novedades auditadas · BankVision v4 (noviembre de 2026)
+
+Esta versión mantiene las seis pestañas de la v3 y añade **calibración heterogénea de oficinas**. 
+
+- **Scatter de segmentos:** cada punto tiene un número y una **leyenda visible** con nombre, morosidad y ROE exactos. Los dos puntos casi coincidentes se separan solo visualmente mediante líneas de referencia, sin modificar los datos ni los tooltips.
+- **ROE agregado:** en el ámbito nacional el beneficio simulado es 1.046,39 M€, el patrimonio asignado es 9.376,52 M€ y el ROE es **11,16 %**. Los cinco ROE de segmento no se promedian: se ponderan por patrimonio asignado. Los segmentos de Banca Privada e Institucional siguen teniendo pérdidas en el modelo inicial; no se ocultan.
+- **Productos:** hay **14** en el catálogo. En saldos se muestran 6 créditos + 3 depósitos + 2 inversiones (11), más 3 productos de servicios (seguros de vida, seguros de hogar y TPV/cobros) **por comisiones netas**, no por saldos. Las barras de los tres grupos de saldos usan un **mismo máximo de escala**; las de servicios usan otra escala, claramente anunciada.
+- **Variaciones de créditos y depósitos:** el comparador es el **mismo mes de 2023**, dato de referencia sintético del archivo origen; no existe una tabla histórica detallada 2023 para el resto de KPI.
+- **Gestores:** «productividad» se calcula como ingresos brutos del periodo entre la **suma de gestores-mes**. Se muestran por separado los gestores al cierre de diciembre y el dato de productividad.
+- **Oficinas con diversidad reproducible:** dispersión por oficina en activos, rendimiento sobre activos, gasto comercial local, productividad por gestor-mes y satisfacción. Los valores son simulados con factores estables por oficina y pequeñas variaciones mensuales. Para 156 oficinas, el rendimiento anual ingresos/activos varía del **2,7 al 5,9 %**, el gasto local/ingresos del **7,0 al 18,5 %**, la satisfacción del **7,8 al 9,3/10**, la productividad del **163 al 771 k€/gestor-mes**.
+- **Conservación financiera:** el detalle recalibrado concilia con las fuentes regionales por **mes × región × segmento × producto**; el total regional de activos y gasto comercial también se conserva. El script `scripts/audit_branch_v4.cjs` verifica más de **90.000 conciliaciones**.
+
+### Importante: cómo se relaciona esta versión con el Excel de 300.053 filas
+
+El archivo original `modelo_bancario_300k_powerbi_2024.xlsx` es la **línea base v3**, mientras que v4 aplica una recalibración de oficinas en los JSON de la web. Por tanto, **los valores por oficina de la web v4 ya no son idénticos a los de las hojas originales**. Para reconstruir o trabajar en Excel con los valores actualizados, utiliza el archivo adicional `BankVision_v4_Adenda_Oficinas.xlsx` que se entrega por separado. También se incluyen `data/office-overrides-v4.csv` y `data/office-profiles-v4.csv`; el detalle financiero recalibrado está en `data/core-offices-r*.json`. No debe presentarse el XLSX original como una copia exacta de la v4.
+
+**Modelo de provisiones pendiente:** la ratio simulada provisiones totales / dudosos permanece cerca de **145–146 %** en las cinco regiones. Es una proxy de provisiones totales, no la cobertura de Stage 3. La simulación regulatoria del riesgo aún debería diversificarse por vintage/segmento/fase antes de presentarse como una entidad real.
+
+### Volver a construir los JSON desde el Excel
+
+```bash
+python scripts/build_data.py /ruta/al/modelo_bancario_300k_powerbi_2024.xlsx
+python scripts/calibrate_offices_v4.py
+node scripts/audit_financial.cjs
+node scripts/audit_branch_v4.cjs
+node scripts/test_render_v4.cjs
+```
+
+El calibrador se debe ejecutar una sola vez, inmediatamente después de regenerar los JSON originales; evita una segunda recalibración sobre datos ya ajustados.
+
+### Comprobación de interfaz
+
+Se han probado la generación de HTML de las seis pestañas, los filtros temporales y regionales, una oficina concreta y las conciliaciones numéricas. La captura automática con navegador no se pudo completar en este entorno por una restricción del navegador; conviene hacer una última revisión visual de escritorio y móvil una vez desplegada en Vercel.
+
+---
+
 ## Características
 
 - **Visión ejecutiva**: activos, créditos, depósitos, márgenes, ROE, ROA, CET1, eficiencia, productos, oficinas y captación.
@@ -57,10 +93,11 @@ Los datos del Excel se preprocesaron como JSON para que no sea necesario descarg
 - `data/liquidity.json`, `data/maturities.json`, `data/liquid-assets.json`, `data/stress.json`: hechos de liquidez y solvencia.
 - `data/meta.json`, `data/schema.json`: catálogos, claves, columnas y unidades.
 
-Para regenerar los JSON desde tu Excel:
+Para regenerar los JSON desde tu Excel de base, aplica a continuación la recalibración v4 como se indica arriba:
 
 ```bash
 python scripts/build_data.py /ruta/al/modelo_bancario_300k_powerbi_2024.xlsx
+python scripts/calibrate_offices_v4.py
 ```
 
 Requiere Python 3 y `lxml` en el entorno de generación (solo para regenerar, no para servir la web).

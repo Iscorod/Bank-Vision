@@ -17,3 +17,15 @@
 
 /* Audit v3: detailed credit, deposit and investment reconciliation */
 .product-breakdowns{display:grid;gap:15px}.product-section{border-bottom:1px solid #e7eef6;padding:0 0 11px}.product-section:last-child{border-bottom:0;padding-bottom:0}.product-section-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:0 0 8px;font-size:11px;color:#193b5f}.product-section-head span{color:#0a65bc;font-weight:800;white-space:nowrap}.product-breakdowns .bar-list{gap:6px}.product-breakdowns .bar-item{grid-template-columns:minmax(90px,1.4fr) minmax(60px,2.1fr) minmax(70px,.9fr);font-size:9px}.product-breakdowns .bar-item-label{font-size:9px}.product-breakdowns .bar-value{font-size:9px}.reconciliation{color:#1e976f;font-size:9px;font-weight:800;margin-top:5px;text-align:right}.reconciliation.mismatch{color:#c77f30}.product-panel{align-self:start}.scatter-dot circle{transition:stroke-width .16s,r .16s}.scatter-dot:focus-visible circle,.scatter-dot:hover circle{stroke:#173d68;stroke-width:3.5}.data-table th{white-space:normal;min-width:65px}
+
+/* v4: always-visible, keyboard-accessible labels for the five segment scatters. */
+.scatter-index{font:800 9px Manrope,Arial,sans-serif;fill:#fff;pointer-events:none}
+.scatter-key{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;margin:6px 0 4px;padding:6px 0;border-top:1px solid #edf2f8}
+.scatter-key-item{display:flex;align-items:center;gap:5px;min-width:0;font-size:10px;line-height:1.25;color:#294364;font-weight:700;border-radius:6px;padding:3px 4px}
+.scatter-key-item[data-segment]{cursor:pointer}
+.scatter-key-item:hover{background:#f0f7fd}
+.scatter-key-item span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scatter-key-item small{font-size:9px;color:#6e859d;white-space:nowrap}
+.scatter-key-marker{height:17px;width:17px;flex:0 0 17px;border-radius:50%;display:grid;place-items:center;color:white;font-size:9px}
+.product-scale-note{color:#6c82a0;font-size:10px;line-height:1.4;margin:0 0 7px}
+@media(max-width:650px){.scatter-key{grid-template-columns:1fr}.scatter-key-item small{margin-left:auto}}

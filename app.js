@@ -171,7 +171,7 @@ function svgLine(labels,series,options={}){
 }
 function horizontalBars(items,opts={}){
  if(!items.length)return '<div class="empty">No hay datos para mostrar</div>';
- const max=Math.max(...items.map(x=>Math.max(0,x.value)),1);
+ const max=opts.maxValue??Math.max(...items.map(x=>Math.max(0,x.value)),1);
  return `<div class="bar-list">${items.map((a,i)=>{const col=a.color||COLORS[Math.min(i,COLORS.length-1)];const attr=a.product!=null?`data-product="${a.product}"`:a.region!=null?`data-region="${a.region}"`:'';
  return `<div class="bar-item"><span class="bar-item-label" title="${safe(a.label)}">${safe(a.label)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(1,100*a.value/max)}%;background:${col}" ${attr} title="${safe(a.label)} · ${safe(opts.format?opts.format(a.value):fmtInt(a.value))}"></div></div><span class="bar-value">${safe(opts.format?opts.format(a.value):fmtInt(a.value))}</span></div>`}).join('')}</div>`
 }
@@ -217,12 +217,11 @@ function barChart(labels,series,opts={}){
 function labAt(labels,i){return labels[i]||''}
 function scatter(points,opts={}){
  const nums=points.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));if(!nums.length)return '<div class="empty">Sin datos</div>';
- const W=640,H=250,L=65,R=22,T=22,B=45,iw=W-L-R,ih=H-T-B;
+ const W=640,H=264,L=67,R=25,T=23,B=50,iw=W-L-R,ih=H-T-B;
  const xs=nums.map(p=>p.x),ys=nums.map(p=>p.y);
- // Round tick intervals without clipping negative returns.
  const niceAxis=values=>{
    const lo=Math.min(...values),hi=Math.max(...values),width=Math.max(hi-lo,Math.abs(hi)*.006,.01);
-   const low=lo-width*.14,high=hi+width*.14,target=(high-low)/5;
+   const low=lo-width*.13,high=hi+width*.13,target=(high-low)/5;
    const mag=10**Math.floor(Math.log10(Math.max(target,1e-8)));
    const step=([1,2,2.5,5,10].map(v=>v*mag).find(v=>v>=target)||10*mag);
    const min=Math.floor(low/step)*step,max=Math.ceil(high/step)*step;
@@ -233,23 +232,44 @@ function scatter(points,opts={}){
  const x0=opts.xMin??xd.min,x1=opts.xMax??xd.max,y0=opts.yMin??yd.min,y1=opts.yMax??yd.max;
  const xFmt=opts.xFmt||((v)=>fmtPct(v,xd.step<.1?2:1)),yFmt=opts.yFmt||((v)=>fmtPct(v,yd.step<.1?2:1));
  const xx=x=>L+(x-x0)/Math.max(1e-8,x1-x0)*iw,yy=y=>T+ih-(y-y0)/Math.max(1e-8,y1-y0)*ih;
- let out=`<div class="chart-wrap scatter-wrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${safe(opts.aria||'Gráfico de dispersión. Acerca el puntero o usa Tab sobre un punto para ver sus datos.')} ">`;
- for(const x of xd.ticks){out+=`<path class="chart-grid" d="M${xx(x)} ${T}V${T+ih}"/><text class="chart-ticks" text-anchor="middle" x="${xx(x)}" y="${H-24}">${safe(xFmt(x))}</text>`;}
+ const showLegend=opts.showLegend??nums.length<=7;
+ let out=`<div class="chart-wrap scatter-wrap"><svg viewBox="0 0 ${W} ${H}" role="group" aria-label="${safe(opts.aria||'Gráfico de dispersión. Cada segmento se identifica en la leyenda.')} ">`;
+ for(const x of xd.ticks){out+=`<path class="chart-grid" d="M${xx(x)} ${T}V${T+ih}"/><text class="chart-ticks" text-anchor="middle" x="${xx(x)}" y="${H-29}">${safe(xFmt(x))}</text>`;}
  for(const y of yd.ticks){out+=`<path class="chart-grid" d="M${L} ${yy(y)}H${L+iw}"/><text class="chart-ticks" text-anchor="end" x="${L-9}" y="${yy(y)+4}">${safe(yFmt(y))}</text>`;}
- if(y0<0&&y1>0){const zero=yy(0);out+=`<path d="M${L} ${zero}H${L+iw}" stroke="#b9c6d5" stroke-width="1.6" stroke-dasharray="5 4"/><text x="${L+iw-3}" y="${zero-5}" text-anchor="end" font-size="9" fill="#76879e">ROE cero</text>`;}
- // Draw unlabeled dots. The readable detail card only appears on hover or keyboard focus.
+ if(y0<0&&y1>0){const zero=yy(0);out+=`<path d="M${L} ${zero}H${L+iw}" stroke="#b9c6d5" stroke-width="1.6" stroke-dasharray="5 4"/>`;}
+ // When real values nearly coincide, separate only the DRAWN marker and link it
+ // to its exact data coordinate with a leader. Tooltips retain exact metrics.
+ const plotted=[];
  for(let i=0;i<nums.length;i++){
-  const p=nums[i],x=xx(p.x),y=yy(p.y),col=p.y<0?'#e07983':(p.color||COLORS[i%COLORS.length]);
-  const tooltipW=167,tooltipH=43;
-  const bx=clamp(x+16,L+3,W-R-tooltipW-2),by=clamp(y-tooltipH-13,T+3,T+ih-tooltipH-2);
-  const detail=`${xFmt(p.x)}  ·  ${yFmt(p.y)}`;
+  const p=nums[i],actualX=xx(p.x),actualY=yy(p.y);
+  let x=actualX,y=actualY;
+  const collide=(cx,cy)=>plotted.some(q=>Math.hypot(cx-q.x,cy-q.y)<25);
+  if(collide(x,y)){
+    for(let k=0;k<24;k++){
+      const theta=(k%12)*Math.PI/6,ring=18+Math.floor(k/12)*18;
+      const a=clamp(actualX+Math.cos(theta)*ring,L+12,L+iw-12);
+      const b=clamp(actualY+Math.sin(theta)*ring,T+12,T+ih-12);
+      if(!collide(a,b)){x=a;y=b;break;}
+    }
+  }
+  plotted.push({x,y});
+  const col=p.y<0?'#d45d70':(p.color||COLORS[i%COLORS.length]);
+  const tooltipW=180,tooltipH=46;
+  const bx=clamp(x+18,L+3,W-R-tooltipW-2),by=clamp(y-tooltipH-16,T+3,T+ih-tooltipH-2);
+  const detail=`${xFmt(p.x)} · ${yFmt(p.y)}`;
+  if(Math.hypot(x-actualX,y-actualY)>2)out+=`<path d="M${actualX} ${actualY}L${x} ${y}" stroke="${col}" stroke-dasharray="3 3" stroke-width="1.5" opacity=".75"/>`;
   out+=`<g class="scatter-dot" tabindex="0" role="img" aria-label="${safe(p.label)}: ${safe(detail)}" ${p.segment?`data-segment="${safe(p.segment)}"`:''}>
-     <circle cx="${x}" cy="${y}" r="7" fill="${col}" stroke="#fff" stroke-width="2.4"/>
-     <g class="scatter-detail"><rect x="${bx}" y="${by}" width="${tooltipW}" height="${tooltipH}" rx="9" fill="#122e56"/><text class="scatter-detail-title" x="${bx+11}" y="${by+17}">${safe(p.label)}</text><text class="scatter-detail-value" x="${bx+11}" y="${by+32}">${safe(detail)}</text></g>
-    </g>`;
+    <circle cx="${x}" cy="${y}" r="${showLegend?9.5:7.5}" fill="${col}" stroke="#fff" stroke-width="2.2"/>
+    ${showLegend?`<text class="scatter-index" x="${x}" y="${y+3.2}" text-anchor="middle">${i+1}</text>`:''}
+    <title>${safe(p.label)} · ${safe(detail)}</title>
+    <g class="scatter-detail"><rect x="${bx}" y="${by}" width="${tooltipW}" height="${tooltipH}" rx="9" fill="#122e56"/><text class="scatter-detail-title" x="${bx+10}" y="${by+18}">${safe(p.label)}</text><text class="scatter-detail-value" x="${bx+10}" y="${by+35}">${safe(detail)}</text></g>
+   </g>`;
  }
- out+=`<text x="${W/2}" y="${H-4}" text-anchor="middle" class="chart-ticks">${safe(opts.xLabel||'Eje X (%)')}</text><text x="15" y="${T+ih/2}" text-anchor="middle" class="chart-ticks" transform="rotate(-90 15 ${T+ih/2})">${safe(opts.yLabel||'Eje Y (%)')}</text></svg></div>`;
- return out
+ out+=`<text x="${W/2}" y="${H-5}" text-anchor="middle" class="chart-ticks">${safe(opts.xLabel||'Eje X (%)')}</text><text x="14" y="${T+ih/2}" text-anchor="middle" class="chart-ticks" transform="rotate(-90 14 ${T+ih/2})">${safe(opts.yLabel||'Eje Y (%)')}</text></svg></div>`;
+ if(showLegend){
+   out+=`<div class="scatter-key" aria-label="Leyenda de segmentos">${nums.map((p,i)=>`<div class="scatter-key-item" ${p.segment?`data-segment="${safe(p.segment)}"`:''}><b class="scatter-key-marker" style="background:${p.y<0?'#d45d70':(p.color||COLORS[i%COLORS.length])}">${i+1}</b><span>${safe(p.label)}</span><small>${safe(xFmt(p.x))} · ${safe(yFmt(p.y))}</small></div>`).join('')}</div>`;
+ }
+ return out;
 }
 function waterfall(start,parts,opts={}){
  const W=640,H=226,L=18,R=16,T=21,B=46,iw=W-L-R,ih=H-T-B;
@@ -296,12 +316,21 @@ function productBreakdown(ctx){
   {title:'Depósitos de clientes',field:'deposits',total:ctx.stock.deposits,color:'#12b7c8'},
   {title:'Inversiones administradas',field:'investments',total:ctx.stock.investments,color:'#49bd89'}
  ];
- return `<div class="product-breakdowns">${sections.map(section=>{
+ const allStocks=sections.flatMap(s=>productStats(ctx,s.field).filter(p=>p.value>0));
+ const commonMax=Math.max(1,...allStocks.map(p=>p.value));
+ const blocks=sections.map(section=>{
   const items=productStats(ctx,section.field).filter(p=>p.value>0.000001);
   if(!items.length)return '';
   const visible=items.reduce((a,p)=>a+p.value,0),diff=visible-section.total;
-  return `<div class="product-section"><div class="product-section-head"><strong>${safe(section.title)}</strong><span>${fmtM(section.total,1)}</span></div>${horizontalBars(items.map(p=>({...p,product:p.id,color:section.color})),{format:v=>fmtM(v,1)})}<div class="reconciliation ${Math.abs(diff)>0.1?'mismatch':''}">Σ productos: ${fmtM(visible,1)} ${Math.abs(diff)<=.1?'· conciliado':'· comprobar diferencia'}</div></div>`
- }).join('')}</div>`;
+  return `<div class="product-section"><div class="product-section-head"><strong>${safe(section.title)}</strong><span>${fmtM(section.total,1)}</span></div>${horizontalBars(items.map(p=>({...p,product:p.id,color:section.color})),{format:v=>fmtM(v,1),maxValue:commonMax})}<div class="reconciliation ${Math.abs(diff)>0.1?'mismatch':''}">Σ productos: ${fmtM(visible,1)} ${Math.abs(diff)<=.1?'· conciliado':'· comprobar diferencia'}</div></div>`;
+ });
+ const serviceIds=new Set(DATA.meta.products.rows.filter(r=>r[3]==='Servicio').map(r=>r[0]));
+ const services=productStats(ctx,'fee').filter(p=>serviceIds.has(p.id));
+ if(state.product==='all'||serviceIds.has(Number(state.product))){
+  const active=services.filter(p=>p.value>0.00001);
+  blocks.push(`<div class="product-section"><div class="product-section-head"><strong>Servicios: comisiones netas</strong><span>${fmtM(services.reduce((t,p)=>t+p.value,0),1)} · flujo</span></div>${horizontalBars(active.map(p=>({...p,product:p.id,color:'#8b9aca'})),{format:v=>fmtM(v,1)})}<div class="reconciliation">${services.length} servicios sin saldo de cartera · importes acumulados del periodo</div></div>`);
+ }
+ return `<div class="product-breakdowns"><p class="product-scale-note">Escala común de saldos: 0 a ${fmtM(commonMax,0)} · barras comparables entre créditos, depósitos e inversiones. El bloque de servicios muestra flujos con otra escala.</p>${blocks.join('')}</div>`;
 }
 function channelStats(ctx,field=6){const g=group(ctx.leadsFlows,r=>r[2],r=>r[field]);return [...g].map(([id,value])=>({id,label:F.channels.get(id)?.[1]||'Canal',value,channel:id})).sort((a,b)=>b.value-a.value)}
 function segmentMetrics(ctx){
@@ -336,14 +365,14 @@ function officeScores(ctx){
 }
 function renderOfficeTable(ctx,limit=6){
  const rank=officeScores(ctx).slice(0,limit),byOffice=group(ctx.officeClosing,r=>r[1],r=>r[7]);
- const rows=rank.map(o=>({office:o.id,cells:[o.name,fmtM(o.assets),fmtM(o.income,1),fmtK(o.productivity),fmtPct(o.efficiency),`${fmt1(o.rating)} / 10`]}));
- return simpleTable(['Oficina','Activos','Ingresos brutos','Prod. gestor','Gasto local / ingresos','Satisfacción'],rows)
+ const rows=rank.map(o=>({office:o.id,cells:[o.name,fmtM(o.assets),fmtM(o.income,1),fmtInt(o.managers),fmtK(o.productivity),fmtPct(o.efficiency),`${fmt1(o.rating)} / 10`]}));
+ return simpleTable(['Oficina','Activos','Ingresos brutos','Gestores (cierre)','Prod. por gestor-mes','Gasto local / ingresos','Satisfacción'],rows)
 }
 function firstKpi(ctx){const assets=sum(ctx.officeClosing,7),s=ctx.stock;
  return [
   kpi('Activos totales',fmtM(assets),'coins',{detail:`Cierre ${MONTHS[ctx.month-1]} 2024`}),
-  kpi('Créditos en cartera',fmtM(s.credits),'credit',{trend:pctDelta(s.credits,s.creditsPrior)}),
-  kpi('Depósitos a cierre',fmtM(s.deposits),'wallet',{trend:pctDelta(s.deposits,s.depositsPrior)}),
+  kpi('Créditos en cartera',fmtM(s.credits),'credit',{trend:pctDelta(s.credits,s.creditsPrior),trendLabel:`vs. ${MONTHS[ctx.month-1]} 2023`,description:'Saldo al cierre comparado con el mismo mes de 2023'}),
+  kpi('Depósitos a cierre',fmtM(s.deposits),'wallet',{trend:pctDelta(s.deposits,s.depositsPrior),trendLabel:`vs. ${MONTHS[ctx.month-1]} 2023`,description:'Saldo al cierre comparado con el mismo mes de 2023'}),
   kpi('Margen neto',fmtM(ctx.marginNet),'chart',{detail:'Acumulado del periodo'}),
   kpi('ROA',fmtPct(ctx.roa,2),'target',{detail:ctx.months.length===12?'Beneficio / activos a cierre':'Estimación anualizada'}),
   kpi('ROE',fmtPct(ctx.roe),'trending',{detail:ctx.months.length===12?'Beneficio / capital asignado':'Estimación anualizada'}),
@@ -358,13 +387,14 @@ function execPage(ctx){
   `Créditos ${fmtM(ctx.stock.credits)} y depósitos ${fmtM(ctx.stock.deposits)} al cierre de ${MONTHS[ctx.month-1]}.`,
   `Mora ${fmtPct(ctx.npl)}; provisiones totales ${fmtM(ctx.stock.provisions)}. Su relación con dudosos (${fmtPct(ctx.coverage)}) es un proxy, no una cobertura Stage 3 regulatoria.`,
   `Se han generado ${fmtInt(l.leads)} leads y captado ${fmtInt(l.captured)} clientes por canales comerciales.`,
-  `Liquidez LCR ${fmtPct(ctx.lcr)} y solvencia CET1 ${fmtPct(ctx.cet1ratio)} para el ámbito territorial seleccionado.`];
+  `Liquidez LCR ${fmtPct(ctx.lcr)} y solvencia CET1 ${fmtPct(ctx.cet1ratio)} para el ámbito territorial seleccionado.`,
+  `ROE consolidado ${fmtPct(ctx.roe)}: beneficio total / patrimonio asignado total. No se obtiene promediando el ROE de los segmentos.`];
  const volume=productBreakdown(ctx);
  return `<div class="kpi-grid">${firstKpi(ctx)}</div><div class="dash-grid">
  ${panel('Ingresos brutos, costes y beneficio','Flujos de cada mes (M€) · ingresos − costes = beneficio',svgLine(m.labels,[{name:'Ingresos brutos',values:m.income,color:'#075bd0'},{name:'Costes totales',values:m.costs,color:'#0cb7c6'},{name:'Beneficio neto',values:m.profit,color:'#43c977'}],{valueFmt:v=>fmtInt(v),lastLabels:false}),{icon:'chart',foot:'Ingresos brutos: intereses + comisiones + otros. Costes: financiación, comisiones, explotación, deterioros e impuestos. No son acumulados.'})}
  ${panel('Cartera por producto, conciliada','Detalle completo de créditos, depósitos e inversiones a cierre (M€)',volume,{icon:'layers',class:'product-panel'})}
  ${panel('Mix de captación por canal','Distribución de clientes captados durante el periodo',donut(channels,{center:fmtInt(ctx.leads.captured),subtitle:'Captaciones'}),{icon:'pie'})}
- ${panel('Rentabilidad vs. riesgo por segmento',ctx.months.length===12?'ROE del ejercicio frente a ratio de mora':'ROE anualizado estimado frente a ratio de mora',scatter(segs.map((s,i)=>({x:s.risk,y:s.roe,label:s.label,segment:s.id,color:COLORS[i]})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)),{xLabel:'Ratio de mora (%)',yLabel:'ROE (%)'}),{icon:'scatter',foot:'ROE negativo = pérdida estimada del segmento. El ROE agregado puede ser positivo si otros segmentos compensan las pérdidas.'})}
+ ${panel('Rentabilidad vs. riesgo por segmento',ctx.months.length===12?'ROE del ejercicio frente a ratio de mora':'ROE anualizado estimado frente a ratio de mora',scatter(segs.map((s,i)=>({x:s.risk,y:s.roe,label:s.label,segment:s.id,color:COLORS[i]})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)),{xLabel:'Ratio de mora (%)',yLabel:'ROE (%)'}),{icon:'scatter',foot:`ROE global ${fmtPct(ctx.roe)} = beneficio total / patrimonio total. Se pondera por capital asignado, no por media simple; dos segmentos pueden coincidir en riesgo y rentabilidad.`})}
  ${panel('Embudo comercial','De leads a captaciones: volumen y conversión',funnel([l.leads,l.contacted,l.qualified,l.captured]),{icon:'filter'})}
  ${panel('Desempeño de oficinas','Ingresos brutos y gasto comercial local por oficina',renderOfficeTable(ctx),{icon:'building',foot:'El gasto comercial local es solo una parte de los gastos totales. Su ratio no es la eficiencia bancaria de la PyG.'})}
  ${panel('Claves del periodo','Lectura ejecutiva de los principales indicadores',`<div class="insights">${notices.map(x=>`<div class="insight-item">${icon('check','icon icon-sm')}<span>${safe(x)}</span></div>`).join('')}</div>`,{class:'full story-card',icon:'spark'})}
@@ -495,7 +525,7 @@ function officesPage(ctx){
   kpi('Activos por oficina',fmtM(assets/Math.max(1,activeOffices),1),'coins',{detail:'Media de cierre'}),
   kpi('Depósitos por oficina',fmtM(deposits/Math.max(1,activeOffices),1),'wallet',{detail:'Media de cierre'}),
   kpi('Créditos por oficina',fmtM(lending/Math.max(1,activeOffices),1),'credit',{detail:'Media de cierre'}),
-  kpi('Productividad gestor',fmtK(productivity),'target',{detail:'Ingresos / gestor-mes'}),
+  kpi('Productividad gestor-mes',fmtK(productivity),'target',{detail:'Ingresos / suma gestores-mes'}),
   kpi('Gasto local',fmtM(localCosts),'layers',{detail:'Total del periodo'}),
   kpi('Satisfacción',`${fmt2or1(satisfaction)} / 10`,'check',{detail:'Media ponderada'})].join('');
  const top=scores.slice(0,8),ranking=top.map(s=>({label:s.name,value:s.income}));
@@ -516,8 +546,8 @@ function officesPage(ctx){
  ${panel('Ranking de oficinas','Ingresos comerciales acumulados (M€)',horizontalBars(ranking,{format:v=>fmtM(v,1)}),{icon:'chart'})}
  ${panel('Distribución territorial de la red','Número de oficinas por región',regionTiles,{icon:'map',foot:'Selecciona una región para filtrar el cuadro de mando.'})}
  ${panel('Créditos y depósitos por región','Saldos bancarios al cierre (M€)',barChart(regions.map(id=>F.regions.get(id)?.[1]||''),[{name:'Créditos',values:regionCredit,color:'#0b64d2'},{name:'Depósitos',values:regionDeposit,color:'#15b9d0'}],{tickFmt:fmtInt}),{icon:'coins'})}
- ${panel('Productividad por oficina y trimestre','Ingresos comerciales por gestor (k€)',customHeat,{icon:'table'})}
- ${panel('Productividad vs. gasto comercial','Ingresos brutos por gestor (k€) y gasto comercial / ingresos brutos (%)',scatter(scatterPoints,{xLabel:'Gasto comercial / ingresos (%)',yLabel:'Productividad (k€)',yFmt:v=>fmt1(v)+' k€'}),{icon:'scatter',foot:'Este ratio mide gasto comercial local, no eficiencia bancaria de la PyG. El modelo sintético de oficinas presenta poca dispersión.'})}
+ ${panel('Productividad por oficina y trimestre','Ingresos brutos por gestor-mes (k€)',customHeat,{icon:'table'})}
+ ${panel('Productividad vs. gasto comercial','Ingresos brutos por gestor-mes (k€) y gasto comercial / ingresos brutos (%)',scatter(scatterPoints,{xLabel:'Gasto comercial / ingresos (%)',yLabel:'Productividad (k€)',yFmt:v=>fmt1(v)+' k€'}),{icon:'scatter',foot:'Los marcadores coincidentes se separan visualmente con una línea punteada; el valor exacto está en el tooltip. Gasto comercial local / ingreso bruto, no eficiencia bancaria de PyG.'})}
  ${panel('Detalle de las principales oficinas','Indicadores de gestión y satisfacción',renderOfficeTable(ctx,10),{icon:'building',foot:'Clic sobre una oficina para filtrar todas las vistas compatibles.'})}
  </div>`
 }
@@ -552,7 +582,7 @@ function render(){
  <header class="header"><div class="heading"><span class="heading-mark">${icon('chart','icon-lg')}</span><div><h1>Panel de Control Financiero Bancario</h1><p>${safe(breadcrumb())} <span class="muted">· Ejercicio 2024</span></p></div></div><div class="top-right"><span class="simulation-pill"><span class="sim-dot"></span> Datos 100 % simulados</span><span class="update-pill">${icon('calendar','icon-sm')} Corte: ${safe(MONTHS[ctx.month-1])} 2024</span><button class="icon-btn" type="button" data-action="reset" title="Restablecer filtros">${icon('refresh','icon-sm')} Restablecer</button><button class="icon-btn" type="button" data-action="csv" title="Exportar datos filtrados">${icon('download','icon-sm')} CSV</button></div></header>
  ${renderPageTabs()}${renderFilters()}${filterScope()}<div class="section-eyebrow">VISIÓN ANALÍTICA <span></span> ${safe(breadcrumb().toUpperCase())}</div>
  ${PAGE_RENDERERS[state.page](ctx)}
- <footer class="footer"><span><strong>BankVision / Banking Analytics</strong> · Proyecto demostrativo con 300.053 registros originales · Importes en millones de euros salvo indicación</span><span>Datos sintéticos · 2024 · Diseñado para portfolio profesional</span></footer>
+ <footer class="footer"><span><strong>BankVision v4 / Banking Analytics</strong> · 300.053 registros originales + calibración de oficinas v4 · Importes en millones de euros salvo indicación</span><span>Datos sintéticos · 2024 · Diseñado para portfolio profesional</span></footer>
  </main></div>`;
  document.title=`BankVision · ${breadcrumb()}`;
 }

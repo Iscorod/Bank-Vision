@@ -1,0 +1,26 @@
+{
+  "incomeToAssetsPct": {
+    "min": 2.7,
+    "max": 5.92,
+    "stdev": 0.78,
+    "median": 4.23
+  },
+  "localEfficiencyPct": {
+    "min": 6.98,
+    "max": 18.54,
+    "stdev": 3.36,
+    "median": 12.18
+  },
+  "satisfaction": {
+    "min": 7.78,
+    "max": 9.31,
+    "stdev": 0.43,
+    "median": 8.56
+  },
+  "productivityKperStaffMonth": {
+    "min": 162.71,
+    "max": 770.83,
+    "stdev": 109.33,
+    "median": 373.29
+  }
+}
