@@ -66,9 +66,10 @@ const DATA={};const F={};let lastContext=null;
 async function json(path){const res=await fetch(`data/${path}`);if(!res.ok)throw new Error(`No se pudo cargar ${path} (${res.status})`);return res.json()}
 async function init(){
  try{
-  const names={meta:'meta.json',schema:'schema.json',core:'core-regions.json',clients:'clients.json',leads:'leads.json',ratings:'ratings.json',offices:'offices-monthly.json',campaigns:'campaigns.json',liquidity:'liquidity.json',maturities:'maturities.json',buffer:'liquid-assets.json',stress:'stress.json'};
+  const names={meta:'meta.json',schema:'schema.json',core:'core-regions.json',clients:'clients.json',leads:'leads.json',ratings:'ratings.json',offices:'offices-monthly.json',campaigns:'campaigns.json',liquidity:'liquidity.json',maturities:'maturities.json',buffer:'liquid-assets.json',stress:'stress.json',officeAttribution:'office-attribution-v7.json',riskStages:'risk-stages-v7.json',transferPricing:'transfer-pricing-v7.json'};
   const keys=Object.keys(names);const arr=await Promise.all(keys.map(k=>json(names[k])));
   keys.forEach((k,i)=>DATA[k]=arr[i]);
+  F.officeAttribution=new Map(DATA.officeAttribution.map(r=>[`${r[0]}-${r[1]}`,r]));
   ['regions','offices','segments','products','channels','ratings','sectors','campaigns','bufferTypes','maturityTypes','scenarios','severities'].forEach(d=>F[d]=new Map(DATA.meta[d].rows.map(r=>[r[0],r])));
   state.ready=true;render();
  }catch(e){console.error(e);$('#app').innerHTML=`<div class="boot"><div class="boot-logo">!</div><h2>No hemos podido cargar los datos</h2><p>${safe(e.message)}</p><p>Abre el proyecto desde un servidor HTTP local o desde Vercel, no como archivo file://.</p></div>`}
@@ -95,6 +96,20 @@ async function selectOffice(id){
  }
  render()
 }
+// Stage-specific allowances: v7 ECL scenario. Monetary amounts in M€.
+const STAGE3_RATE={1:.57,2:.79,3:.72,4:.67,5:.86,6:.70};
+const STAGE2_RATE={1:.029,2:.075,3:.064,4:.058,5:.096,6:.060};
+const STAGE1_RATE={1:.0019,2:.0045,3:.0033,4:.0034,5:.0068,6:.0036};
+const REGION_RISK={1:.94,2:1.03,3:1.10,4:.98,5:1.055};
+const SEGMENT_RISK={1:.96,2:1.06,3:1.015,4:1.09,5:1.045};
+function stageEcl(row){
+ const m=row[0],region=state.office==='all'?row[1]:F.offices.get(row[1])?.[4],seg=row[2],prod=row[3];
+ if(!STAGE3_RATE[prod]||!region)return {s1:0,s2:0,s3:0,p1:0,p2:0,p3:0};
+ const exposure=Math.max(0,row[7]),s3=Math.min(exposure,Math.max(0,row[8])),s2=Math.max(0,Math.min(row[9],exposure-s3)),s1=Math.max(0,exposure-s3-s2);
+ const mult=REGION_RISK[region]*SEGMENT_RISK[seg]*(1+.021*Math.sin(.65*m+.75*region+1.1*seg));
+ return {s1,s2,s3,p1:s1*STAGE1_RATE[prod]*mult,p2:s2*STAGE2_RATE[prod]*mult,p3:s3*Math.min(.94,STAGE3_RATE[prod]*mult)};
+}
+function riskStages(rows){const res={s1:0,s2:0,s3:0,p1:0,p2:0,p3:0};for(const row of rows){const e=stageEcl(row);for(const k of Object.keys(res))res[k]+=e[k]}return res;}
 function getCtx(){
  const months=selectedMonths(),last=months.at(-1),includes=m=>months.includes(m);
  const core=coreFiltered(), allGeoCore=coreFiltered(true),
@@ -120,6 +135,7 @@ function getCtx(){
  const profit=marginNet-f.impairment-f.tax;
  const costIncome=ratio(f.opex,gross);
  const annualFactor=12/months.length;
+ const stage=riskStages(closing);
  // Allocate denominator capital (by RWA) and assets (by business stock) when filters restrict segments/products/offices.
  const selectedRegionCore=DATA.core.filter(r=>r[0]===last&&regionIds.includes(r[1]));
  const fullRegionRwa=sum(selectedRegionCore,11), fullRegionBusiness=total(selectedRegionCore,r=>r[4]+r[5]+r[6]);
@@ -131,8 +147,8 @@ function getCtx(){
  const clients={active:sum(clientsClosing,3),new:sum(clientsFlows,4),lost:sum(clientsFlows,5),digital:sum(clientsClosing,6),linked:sum(clientsClosing,7),products:sum(clientsClosing,8),prior:sum(clientsClosing,9)};
  const leads={leads:sum(leadsFlows,3),contacted:sum(leadsFlows,4),qualified:sum(leadsFlows,5),captured:sum(leadsFlows,6),linked:sum(leadsFlows,7),marketing:sum(leadsFlows,8),prior:sum(leadsFlows,9)};
  const lq={hqla:sum(liqClosing,2),outflow:sum(liqClosing,3),stableAvail:sum(liqClosing,4),stableReq:sum(liqClosing,5),rwa:sum(liqClosing,6),cet1:sum(liqClosing,7),tier1:sum(liqClosing,8),capital:sum(liqClosing,9),gap:sum(liqClosing,10),equity:sum(liqClosing,11)};
- const q={month:last,months,includes,flows,closing,core,geoClosing,officeRows,officeClosing,officeFlows,clientsRows,clientsClosing,clientsFlows,leadRows,leadsFlows,ratingRows,ratingClosing,liqRows,liqClosing,liqFlows,stock:s,fin:f,marginInterest,feeNet,gross,marginNet,profit,profitPrior:f.profitPrior,costIncome,roe,roa,clients,leads,liquidity:lq,annualFactor,
-  npl:ratio(s.doubtful,s.credits),stage2:ratio(s.stage2,s.exposure),coverage:ratio(s.provisions,s.doubtful),costRisk:ratio(f.impairment*annualFactor,s.credits),lcr:ratio(lq.hqla,lq.outflow),nsfr:ratio(lq.stableAvail,lq.stableReq),cet1ratio:ratio(lq.cet1,lq.rwa),tier1ratio:ratio(lq.tier1,lq.rwa)};
+ const q={month:last,months,includes,flows,closing,core,geoClosing,officeRows,officeClosing,officeFlows,clientsRows,clientsClosing,clientsFlows,leadRows,leadsFlows,ratingRows,ratingClosing,liqRows,liqClosing,liqFlows,stock:s,fin:f,marginInterest,feeNet,gross,marginNet,profit,stage,profitPrior:f.profitPrior,costIncome,roe,roa,clients,leads,liquidity:lq,annualFactor,allocatedEquity,
+  npl:ratio(s.doubtful,s.credits),stage2:ratio(s.stage2,s.exposure),coverage:ratio(s.provisions,s.doubtful),coverageStage3:ratio(stage.p3,stage.s3),costRisk:ratio(f.impairment*annualFactor,s.credits),lcr:ratio(lq.hqla,lq.outflow),nsfr:ratio(lq.stableAvail,lq.stableReq),cet1ratio:ratio(lq.cet1,lq.rwa),tier1ratio:ratio(lq.tier1,lq.rwa)};
  return q;
 }
 /* Accessible, dependency-free SVG chart components. */
@@ -254,12 +270,15 @@ function scatter(points,opts={}){
   }
   plotted.push({x,y});
   const col=p.y<0?'#d45d70':(p.color||COLORS[i%COLORS.length]);
+  const equityShare=opts.bubbleSize&&Number.isFinite(p.capital)&&nums.reduce((a,q)=>a+(q.capital||0),0)>0
+    ?p.capital/nums.reduce((a,q)=>a+(q.capital||0),0):0;
+  const markerRadius=opts.bubbleSize?8+7*Math.sqrt(Math.max(0,equityShare)):showLegend?9.5:7.5;
   const tooltipW=180,tooltipH=46;
   const bx=clamp(x+18,L+3,W-R-tooltipW-2),by=clamp(y-tooltipH-16,T+3,T+ih-tooltipH-2);
   const detail=`${xFmt(p.x)} · ${yFmt(p.y)}`;
   if(Math.hypot(x-actualX,y-actualY)>2)out+=`<path d="M${actualX} ${actualY}L${x} ${y}" stroke="${col}" stroke-dasharray="3 3" stroke-width="1.5" opacity=".75"/>`;
   out+=`<g class="scatter-dot" tabindex="0" role="img" aria-label="${safe(p.label)}: ${safe(detail)}" ${p.segment?`data-segment="${safe(p.segment)}"`:''}>
-    <circle cx="${x}" cy="${y}" r="${showLegend?9.5:7.5}" fill="${col}" stroke="#fff" stroke-width="2.2"/>
+    <circle cx="${x}" cy="${y}" r="${markerRadius.toFixed(1)}" fill="${col}" stroke="#fff" stroke-width="2.2"/>
     ${showLegend?`<text class="scatter-index" x="${x}" y="${y+3.2}" text-anchor="middle">${i+1}</text>`:''}
     <title>${safe(p.label)} · ${safe(detail)}</title>
     <g class="scatter-detail"><rect x="${bx}" y="${by}" width="${tooltipW}" height="${tooltipH}" rx="9" fill="#122e56"/><text class="scatter-detail-title" x="${bx+10}" y="${by+18}">${safe(p.label)}</text><text class="scatter-detail-value" x="${bx+10}" y="${by+35}">${safe(detail)}</text></g>
@@ -267,7 +286,8 @@ function scatter(points,opts={}){
  }
  out+=`<text x="${W/2}" y="${H-5}" text-anchor="middle" class="chart-ticks">${safe(opts.xLabel||'Eje X (%)')}</text><text x="14" y="${T+ih/2}" text-anchor="middle" class="chart-ticks" transform="rotate(-90 14 ${T+ih/2})">${safe(opts.yLabel||'Eje Y (%)')}</text></svg></div>`;
  if(showLegend){
-   out+=`<div class="scatter-key" aria-label="Leyenda de segmentos">${nums.map((p,i)=>`<div class="scatter-key-item" ${p.segment?`data-segment="${safe(p.segment)}"`:''}><b class="scatter-key-marker" style="background:${p.y<0?'#d45d70':(p.color||COLORS[i%COLORS.length])}">${i+1}</b><span>${safe(p.label)}</span><small>${safe(xFmt(p.x))} · ${safe(yFmt(p.y))}</small></div>`).join('')}</div>`;
+   const legend=`<div class="scatter-key ${opts.legendTop?'scatter-key-above':''}" aria-label="Leyenda de segmentos">${nums.map((p,i)=>`<div class="scatter-key-item" ${p.segment?`data-segment="${safe(p.segment)}"`:''}><b class="scatter-key-marker" style="background:${p.y<0?'#d45d70':(p.color||COLORS[i%COLORS.length])}">${i+1}</b><span>${safe(p.label)}</span><small>${safe(xFmt(p.x))} mora · ${safe(yFmt(p.y))} ROE</small>${Number.isFinite(p.capital)?`<em>Capital ${fmtM(p.capital,1)} · ${fmtPct(ratio(p.capital,nums.reduce((a,q)=>a+(q.capital||0),0)))}</em>`:''}</div>`).join('')}</div>`;
+   out=opts.legendTop?legend+out:out+legend;
  }
  return out;
 }
@@ -297,7 +317,7 @@ function funnel(values,opts={}){
  const detail=opts.expanded?`<div class="funnel-conversion-total"><span>Conversión total · leads a clientes</span><strong>${fmtPct(ratio(values.at(-1),values[0]))}</strong></div>`:'';
  return `<div class="funnel-layout ${opts.expanded?'funnel-expanded':''}"><div class="funnel-body"><div class="funnel-shapes">${values.map((v,i)=>`<div class="funnel-stage" style="background:${cols[i]}">${fmtInt(v)}</div>`).join('')}</div><div class="funnel-steps">${names.map((name,i)=>`<div class="funnel-step"><i style="background:${cols[i]}"></i><span class="funnel-name">${name}</span><b>${fmtInt(values[i])}</b>${i?`<small>${fmtPct(ratio(values[i],values[i-1]))} conversión</small>`:'<small>Inicio del embudo</small>'}</div>`).join('')}</div></div>${detail}</div>`;
 }
-/* Reusable financial aggregations, all derived from the source Excel. */
+/* Reusable financial aggregations, source Excel plus documented v4/v7 recalibrations. */
 function group(rows, keyFn, valueFn){const g=new Map();for(const r of rows){const k=keyFn(r);g.set(k,(g.get(k)||0)+valueFn(r))}return g}
 function byMonth(rows,valueFn){return selectedMonths().map(m=>total(rows.filter(r=>r[0]===m),valueFn))}
 function getRevenue(r){return r[16]-r[17]+r[18]-r[19]+r[20]}
@@ -361,12 +381,35 @@ function productBreakdown(ctx){
 function channelStats(ctx,field=6){const g=group(ctx.leadsFlows,r=>r[2],r=>r[field]);return [...g].map(([id,value])=>({id,label:F.channels.get(id)?.[1]||'Canal',value,channel:id})).sort((a,b)=>b.value-a.value)}
 function segmentMetrics(ctx){
  const closing=new Map(),flow=new Map();
- for(const r of ctx.closing){let a=closing.get(r[2]);if(!a){a={credit:0,doubt:0,rwa:0,volume:0};closing.set(r[2],a)}a.credit+=r[4];a.doubt+=r[8];a.rwa+=r[11];a.volume+=r[4]+r[5]+r[6]}
- for(const r of ctx.flows){let a=flow.get(r[2]);if(!a){a={profit:0,opex:0,gross:0};flow.set(r[2],a)}a.profit+=getProfit(r);a.opex+=r[21];a.gross+=getRevenue(r)}
- const out=[];const totalRwa=[...closing.values()].reduce((s,a)=>s+a.rwa,0);
- for(const [id,s] of closing){const f=flow.get(id)||{profit:0,opex:0,gross:0};const allocEquity=ctx.liquidity.equity*ratio(s.rwa,totalRwa,1);
-  out.push({id,label:F.segments.get(id)?.[1]||'Segmento',risk:ratio(s.doubt,s.credit),roe:ratio(f.profit*ctx.annualFactor,allocEquity),eff:ratio(f.opex,f.gross),profit:f.profit,credit:s.credit,volume:s.volume})}
- return out
+ for(const r of ctx.closing){
+  let a=closing.get(r[2]);if(!a){a={credit:0,doubt:0,rwa:0,volume:0};closing.set(r[2],a)}
+  a.credit+=r[4];a.doubt+=r[8];a.rwa+=r[11];a.volume+=r[4]+r[5]+r[6];
+ }
+ for(const r of ctx.flows){
+  let a=flow.get(r[2]);if(!a){a={profit:0,opex:0,gross:0,interest:0,funding:0,fees:0,feeCost:0,other:0,impairment:0,tax:0};flow.set(r[2],a)}
+  a.profit+=getProfit(r);a.opex+=r[21];a.gross+=getRevenue(r);
+  a.interest+=r[16];a.funding+=r[17];a.fees+=r[18];a.feeCost+=r[19];a.other+=r[20];a.impairment+=r[22];a.tax+=r[23];
+ }
+ const out=[],totalRwa=[...closing.values()].reduce((s,a)=>s+a.rwa,0);
+ for(const [id,s] of closing){
+  const f=flow.get(id)||{profit:0,opex:0,gross:0,interest:0,funding:0,fees:0,feeCost:0,other:0,impairment:0,tax:0};
+  // A selected product / segment receives only its proportional share of equity; the
+  // segment-level denominator must sum to the same allocated equity as the global ROE.
+  const equity=ctx.allocatedEquity*ratio(s.rwa,totalRwa,1);
+  out.push({id,label:F.segments.get(id)?.[1]||'Segmento',risk:ratio(s.doubt,s.credit),roe:ratio(f.profit*ctx.annualFactor,equity),
+   eff:ratio(f.opex,f.gross),profit:f.profit,equity,rwa:s.rwa,interestMargin:f.interest-f.funding,
+   feeMargin:f.fees-f.feeCost,gross:f.gross,opex:f.opex,impairment:f.impairment,tax:f.tax,credit:s.credit,volume:s.volume});
+ }
+ return out;
+}
+function segmentCapitalDetails(segments,ctx){
+ const totalEquity=segments.reduce((sum,s)=>sum+s.equity,0);
+ const totalProfit=segments.reduce((sum,s)=>sum+s.profit,0);
+ const table=segments.map(s=>`<tr><td>${safe(s.label)}</td><td>${fmtM(s.interestMargin,1)}</td><td>${fmtM(s.feeMargin,1)}</td><td>${fmtM(s.opex,1)}</td><td>${fmtM(s.impairment+s.tax,1)}</td><td>${fmtM(s.profit,1)}</td><td>${fmtM(s.equity,1)} (${fmtPct(ratio(s.equity,totalEquity))})</td><td>${fmtM(s.rwa,1)}</td><td>${fmtPct(s.roe)}</td></tr>`).join('');
+ return `<div class="roe-reconciliation"><strong>ROE consolidado ${fmtPct(ctx.roe)}</strong><span>${fmtM(totalProfit,1)} beneficio anual / ${fmtM(totalEquity,1)} patrimonio asignado</span></div>
+ <details class="segment-details"><summary>Ver causas de pérdidas y conciliación por segmento</summary>
+ <div class="tbl-wrap"><table class="data-table"><thead><tr><th>Segmento</th><th>Margen financiero</th><th>Comisiones netas</th><th>Explotación</th><th>Deterioros + impuestos</th><th>Beneficio</th><th>Patrimonio y peso</th><th>RWA</th><th>ROE</th></tr></thead><tbody>${table}</tbody></table></div>
+ <p class="segment-details-note">Patrimonio distribuido según RWA. La v7 aplica una asignación revisada de costes de financiación (transfer pricing interno) a Banca Privada e Institucional, compensada en los demás segmentos; el beneficio bancario total no cambia. En filtros por producto u oficina el capital es una asignación sintética, no un dato regulatorio individual.</p></details>`;
 }
 function regionRiskHeat(ctx){
  const reg=state.region==='all'?[1,2,3,4,5]:[Number(state.region)];
@@ -383,16 +426,16 @@ function regionRiskHeat(ctx){
 function officeScores(ctx){
  const byOffice=new Map();
  for(const r of ctx.officeFlows){let o=byOffice.get(r[1]);if(!o){o={id:r[1],income:0,cost:0,claims:0,managerMonths:0,assets:0,satisfaction:0,surveys:0,months:0};byOffice.set(r[1],o)}
-  o.income+=r[8];o.cost+=r[5];o.claims+=r[6];o.managerMonths+=r[2];o.months++;
+  const at=F.officeAttribution?.get(`${r[0]}-${r[1]}`);o.income+=r[8];o.commercialIncome=(o.commercialIncome||0)+(at?at[2]:r[8]*.157);o.cost+=r[5];o.claims+=r[6];o.managerMonths+=r[2];o.months++;o.fteMonths=(o.fteMonths||0)+(at?at[3]:Math.round(r[7]/14.5));
   o.satisfaction+=r[4]*r[3];o.surveys+=r[3]
  }
- for(const r of ctx.officeClosing){const o=byOffice.get(r[1]);if(o){o.assets=r[7];o.managers=r[2]}}
- return [...byOffice.values()].map(o=>({...o,name:F.offices.get(o.id)?.[2]||`Oficina ${o.id}`,city:F.offices.get(o.id)?.[3]||'',region:F.offices.get(o.id)?.[4]||0,productivity:o.managerMonths?o.income*1000/o.managerMonths:0,efficiency:ratio(o.cost,o.income),rating:o.surveys?o.satisfaction/o.surveys:NaN})).sort((a,b)=>b.income-a.income)
+ for(const r of ctx.officeClosing){const o=byOffice.get(r[1]);if(o){o.assets=r[7];o.managers=r[2];o.fte=F.officeAttribution?.get(`${r[0]}-${r[1]}`)?.[3]||Math.round(r[7]/14.5)}}
+ return [...byOffice.values()].map(o=>({...o,name:F.offices.get(o.id)?.[2]||`Oficina ${o.id}`,city:F.offices.get(o.id)?.[3]||'',region:F.offices.get(o.id)?.[4]||0,productivity:o.managerMonths?o.commercialIncome*1000/o.managerMonths:0,assetsPerFte:o.fte?o.assets/o.fte:NaN,efficiency:ratio(o.cost,o.income),rating:o.surveys?o.satisfaction/o.surveys:NaN})).sort((a,b)=>b.income-a.income)
 }
 function renderOfficeTable(ctx,limit=6){
  const rank=officeScores(ctx).slice(0,limit);
- const rows=rank.map(o=>({office:o.id,cells:[o.name,fmtM(o.assets),fmtM(o.income,1),fmtInt(o.managers),fmtK(o.productivity),fmtPct(o.efficiency),`${fmt1(o.rating)} / 10`]}));
- return simpleTable(['Oficina','Activos','Ingresos brutos','Gestores (cierre)','Prod. por gestor-mes','Gasto local / ingresos','Satisfacción'],rows)
+ const rows=rank.map(o=>({office:o.id,cells:[o.name,fmtM(o.assets),fmtM(o.income,1),fmtInt(o.managers),fmtInt(o.fte),fmtK(o.productivity),fmtPct(o.efficiency),`${fmt1(o.rating)} / 10`]}));
+ return simpleTable(['Oficina','Activos','Ingresos brutos','Gestores','FTE asignados','Prod. atribuida / gestor-mes','Gasto local / brutos','Satisfacción'],rows)
 }
 function renderExecutiveOfficeTable(ctx){
  const order={income:'Ingresos brutos',assets:'Activos',productivity:'Productividad',rating:'Satisfacción'};
@@ -404,8 +447,8 @@ function renderExecutiveOfficeTable(ctx){
   <label>Ordenar por <select data-local-filter="officeSort" aria-label="Ordenar oficinas">${Object.entries(order).map(([key,label])=>`<option value="${key}" ${selectedSort===key?'selected':''}>${label}</option>`).join('')}</select></label>
   <label>Mostrar <select data-local-filter="officeLimit" aria-label="Número de oficinas"><option value="5" ${selectedLimit==='5'?'selected':''}>Top 5</option><option value="10" ${selectedLimit==='10'?'selected':''}>Top 10</option><option value="all" ${selectedLimit==='all'?'selected':''}>Todas</option></select></label>
  </div>`;
- const rows=displayed.map(o=>({office:o.id,cells:[o.name,fmtM(o.assets),fmtM(o.income,1),fmtInt(o.managers),fmtK(o.productivity),fmtPct(o.efficiency),`${fmt1(o.rating)} / 10`]}));
- const table=simpleTable(['Oficina','Activos','Ingresos brutos','Gestores (cierre)','Prod. / gestor-mes','Gasto local / ingresos','Satisfacción'],rows);
+ const rows=displayed.map(o=>({office:o.id,cells:[o.name,fmtM(o.assets),fmtM(o.income,1),fmtInt(o.managers),fmtInt(o.fte),fmtK(o.productivity),fmtPct(o.efficiency),`${fmt1(o.rating)} / 10`]}));
+ const table=simpleTable(['Oficina','Activos','Ingresos brutos','Gestores','FTE asignados','Prod. atribuida / gestor-mes','Gasto local / brutos','Satisfacción'],rows);
  return `<div class="executive-office-layout">${controls}${table}<div class="office-table-status">${icon('info','icon-sm')} Mostrando ${fmtInt(displayed.length)} de ${fmtInt(scores.length)} oficinas · selecciona una fila para filtrar</div></div>`;
 }
 function firstKpi(ctx){const assets=sum(ctx.officeClosing,7),s=ctx.stock;
@@ -422,34 +465,48 @@ function firstKpi(ctx){const assets=sum(ctx.officeClosing,7),s=ctx.stock;
 }
 function execPage(ctx){
  const m=monthResults(ctx),channels=channelStats(ctx),segs=segmentMetrics(ctx),l=ctx.leads;
+ const fullCapitalScope=state.office==='all'&&state.segment==='all'&&state.product==='all';
+ const capitalBridgeText=fullCapitalScope
+   ? `Patrimonio contable asignado ${fmtM(ctx.allocatedEquity,1)} − capital CET1 admisible ${fmtM(ctx.liquidity.cet1,1)} = diferencia de perímetro ${fmtM(ctx.allocatedEquity-ctx.liquidity.cet1,1)}. No se dispone de ajustes prudenciales individuales para atribuir la diferencia. RWA: ${fmtM(ctx.liquidity.rwa,1)}.`
+   : `El patrimonio se asigna solo al producto/segmento/oficina seleccionados, pero CET1 y RWA se informan a nivel regional. Esas cifras no son directamente comparables en este filtro.`;
+ const financialStrip=`<div class="finance-breakdown" aria-label="Puente de márgenes y capital">
+  <div><span>Margen financiero · intereses netos</span><strong>${fmtM(ctx.marginInterest)}</strong></div>
+  <div><span>Margen bruto · base de eficiencia</span><strong>${fmtM(ctx.gross)}</strong></div>
+  <div><span>Patrimonio asignado · base ROE</span><strong>${fmtM(ctx.allocatedEquity)}</strong></div>
+  <div><span>CET1 / RWA · capital regulatorio</span><strong>${fmtM(ctx.liquidity.cet1)} / ${fmtM(ctx.liquidity.rwa)}</strong></div>
+ <div><span>Comisiones netas · 14 productos</span><strong>${fmtM(ctx.feeNet)}</strong></div>
+ <div><span>Capital contable vs. CET1</span><strong>${fmtM(ctx.allocatedEquity)} / ${fmtM(ctx.liquidity.cet1)}</strong><small>No son magnitudes equivalentes</small></div>
+ </div><details class="capital-bridge-note"><summary>Cómo se relacionan patrimonio asignado, CET1 y RWA</summary><p>${safe(capitalBridgeText)}</p><p>ROE = beneficio anualizado / patrimonio contable asignado. CET1 ratio = capital CET1 prudencial / RWA. No deben confundirse ambos capitales.</p></details>`;
  const notices=[`Conciliación PyG: ingresos brutos ${fmtM(ctx.fin.interest+ctx.fin.fees+ctx.fin.other)} − costes totales ${fmtM(ctx.fin.funding+ctx.fin.feeCost+ctx.fin.opex+ctx.fin.impairment+ctx.fin.tax)} = beneficio ${fmtM(ctx.profit)}.`,
   `Margen financiero ${fmtM(ctx.marginInterest)} (intereses netos) → margen bruto ${fmtM(ctx.gross)} (incluye comisiones y otros) → margen neto ${fmtM(ctx.marginNet)} (tras explotación).`,
   `Créditos ${fmtM(ctx.stock.credits)} y depósitos ${fmtM(ctx.stock.deposits)} al cierre de ${MONTHS[ctx.month-1]}.`,
-  `Mora ${fmtPct(ctx.npl)}; provisiones totales ${fmtM(ctx.stock.provisions)}. Su relación con dudosos (${fmtPct(ctx.coverage)}) es un proxy, no una cobertura Stage 3 regulatoria.`,
+  `Mora ${fmtPct(ctx.npl)}. Provisiones Stage 3 ${fmtM(ctx.stage.p3)} / dudosos ${fmtM(ctx.stage.s3)} = cobertura específica simulada ${fmtPct(ctx.coverageStage3)}. Reservas totales ${fmtM(ctx.stock.provisions)}.`,
+  `Comisiones netas de todos los productos ${fmtM(ctx.feeNet)} (incluyen cuentas, tarjetas, préstamos y servicios). El bloque «Servicios» solo muestra comisiones de sus tres productos; no representa las comisiones totales.`,
   `Se han generado ${fmtInt(l.leads)} leads y captado ${fmtInt(l.captured)} clientes por canales comerciales.`,
   `Liquidez LCR ${fmtPct(ctx.lcr)} y solvencia CET1 ${fmtPct(ctx.cet1ratio)} para el ámbito territorial seleccionado.`,
-  `ROE consolidado ${fmtPct(ctx.roe)}: beneficio total / patrimonio asignado total. No se obtiene promediando el ROE de los segmentos.`];
+  `ROE consolidado ${fmtPct(ctx.roe)}: beneficio total / patrimonio asignado total. El patrimonio es contable y asignado según RWA; no equivale al CET1 regulatorio.`];
  const volume=productBreakdown(ctx);
- return `<div class="kpi-grid">${firstKpi(ctx)}</div><div class="dash-grid">
+ return `<div class="kpi-grid">${firstKpi(ctx)}</div>${financialStrip}<div class="dash-grid">
  ${panel('Ingresos brutos, costes y beneficio','Flujos de cada mes (M€) · ingresos − costes = beneficio',svgLine(m.labels,[{name:'Ingresos brutos',values:m.income,color:'#075bd0'},{name:'Costes totales',values:m.costs,color:'#0cb7c6'},{name:'Beneficio neto',values:m.profit,color:'#43c977'}],{valueFmt:v=>fmtInt(v),lastLabels:false}),{icon:'chart',foot:'Ingresos brutos: intereses + comisiones + otros. Costes: financiación, comisiones, explotación, deterioros e impuestos. No son acumulados.'})}
  ${panel('Cartera por producto, conciliada','Detalle completo de créditos, depósitos e inversiones a cierre (M€)',volume,{icon:'layers',class:'product-panel'})}
  ${panel('Mix de captación por canal','Distribución de clientes captados durante el periodo',donut(channels,{center:fmtInt(ctx.leads.captured),subtitle:'Captaciones'}),{icon:'pie'})}
- ${panel('Rentabilidad vs. riesgo por segmento',ctx.months.length===12?'ROE del ejercicio frente a ratio de mora':'ROE anualizado estimado frente a ratio de mora',scatter(segs.map((s,i)=>({x:s.risk,y:s.roe,label:s.label,segment:s.id,color:COLORS[i]})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)),{xLabel:'Ratio de mora (%)',yLabel:'ROE (%)'}),{icon:'scatter',foot:`ROE global ${fmtPct(ctx.roe)} = beneficio total / patrimonio total. Se pondera por capital asignado, no por media simple; dos segmentos pueden coincidir en riesgo y rentabilidad.`})}
+ ${panel('Rentabilidad vs. riesgo por segmento',ctx.months.length===12?'ROE del ejercicio frente a ratio de mora':'ROE anualizado estimado frente a ratio de mora',scatter(segs.map((s,i)=>({x:s.risk,y:s.roe,label:s.label,segment:s.id,color:COLORS[i],capital:s.equity})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)),{xLabel:'Ratio de mora (%)',yLabel:'ROE (%)',bubbleSize:true,legendTop:true})+segmentCapitalDetails(segs,ctx),{icon:'scatter',foot:'El tamaño de la burbuja representa el patrimonio asignado; la posición indicada en la leyenda siempre es la real.'})}
  ${panel('Embudo comercial','De leads a captaciones: volumen y conversión',funnel([l.leads,l.contacted,l.qualified,l.captured],{expanded:true}),{icon:'filter',class:'executive-funnel-panel'})}
- ${panel('Desempeño de oficinas','Ingresos brutos y gasto comercial local por oficina',renderExecutiveOfficeTable(ctx),{icon:'building',class:'executive-office-panel',foot:'El gasto local es una parte de los costes, no el ratio de eficiencia bancaria de la PyG.'})}
+ ${panel('Desempeño de oficinas','Ingresos brutos y gasto comercial local por oficina',renderExecutiveOfficeTable(ctx),{icon:'building',class:'executive-office-panel',foot:'Productividad = ingresos comerciales atribuibles / gestores-mes (k€). Ingresos brutos abarcan toda la actividad bancaria, no se imputan íntegramente a cada gestor. FTE incluye funciones de soporte asignadas. Gasto local distinto de eficiencia bancaria.'})}
  ${panel('Claves del periodo','Lectura ejecutiva de los principales indicadores',`<div class="insights">${notices.map(x=>`<div class="insight-item">${icon('check','icon icon-sm')}<span>${safe(x)}</span></div>`).join('')}</div>`,{class:'full story-card',icon:'spark'})}
  </div>`
 }
 function profitPage(ctx){
  const m=monthResults(ctx),segs=segmentMetrics(ctx),rank=productStats(ctx,'margin').filter(x=>x.value>0).slice(0,7);
  const marginFinancial=ctx.marginInterest,flow=ctx.fin;
+ const feesByProduct=productStats(ctx,'fee').filter(p=>p.value>0).map(p=>({...p,product:p.id}));
  const data=[
   kpi('Margen financiero',fmtM(marginFinancial),'coins',{detail:'Intereses netos'}),
   kpi('Margen bruto',fmtM(ctx.gross),'chart',{detail:'Antes de explotación'}),
   kpi('Margen neto',fmtM(ctx.marginNet),'trending',{detail:'Antes de provisiones'}),
   kpi('Beneficio neto',fmtM(ctx.profit),'target',{trend:pctDelta(ctx.profit,ctx.profitPrior)}),
-  kpi('ROE',fmtPct(ctx.roe),'percentage',{detail:'Anualizado'}),
-  kpi('ROA',fmtPct(ctx.roa,2),'activity',{detail:'Anualizado'}),
+  kpi('ROE',fmtPct(ctx.roe),'percentage',{detail:ctx.months.length===12?'ROE anual':'Anualizado estimado'}),
+  kpi('ROA',fmtPct(ctx.roa,2),'activity',{detail:ctx.months.length===12?'ROA anual':'Anualizado estimado'}),
   kpi('Comisiones netas',fmtM(ctx.feeNet),'wallet',{detail:'Ingresos - costes'}),
   kpi('Coste / ingresos',fmtPct(ctx.costIncome),'layers',{detail:'Eficiencia operativa'})].join('');
  const groupedByQuarter=[1,2,3,4].map(q=>ctx.flows.filter(r=>Math.ceil(r[0]/3)===q));
@@ -463,7 +520,8 @@ function profitPage(ctx){
  ${panel('Ranking de margen por producto','Margen después de gastos operativos (M€)',horizontalBars(rank.map(x=>({...x,product:x.id})),{format:fmtM}),{icon:'trending'})}
  ${panel('Mix de ingresos','Intereses, comisiones y otros por trimestre',incomeMix,{icon:'coins'})}
  ${panel('ROE vs. eficiencia por segmento','Mayor ROE y menor coste / ingresos es preferible',scatter(segs.map((s,i)=>({x:s.eff,y:s.roe,label:s.label,segment:s.id,color:COLORS[i]})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)),{xLabel:'Coste / ingresos (%)',yLabel:'ROE (%)'}),{icon:'scatter'})}
- ${panel('Resultado comercial por oficina','Ingresos y gastos operativos locales',renderOfficeTable(ctx,8),{icon:'building',foot:'La rentabilidad de oficina se basa en ingresos y gastos locales, distinta de la PyG por producto.'})}
+ ${panel('Resultado comercial por oficina','Ingresos bancarios y gasto local',renderOfficeTable(ctx,8),{icon:'building',foot:'Ingresos bancarios brutos ≠ ventas atribuibles a los gestores. La plantilla FTE incluye soporte asignado.'})}
+ ${panel('Comisiones netas por los 14 productos','Incluye cuentas, tarjetas, fondos, seguros y servicios. Suma = comisiones netas del periodo.',horizontalBars(feesByProduct,{format:v=>fmtM(v,1)}),{icon:'wallet',class:'full',foot:`Σ comisiones netas: ${fmtM(feesByProduct.reduce((a,p)=>a+p.value,0),1)} · mismo importe que KPI de comisiones netas.`})}
  </div>`
 }
 function riskPage(ctx){
@@ -481,19 +539,20 @@ function riskPage(ctx){
  const kpis=[
   kpi('Morosidad (NPL)',fmtPct(ctx.npl,2),'alert',{detail:'Saldo dudoso / créditos'}),
   kpi('Coste del riesgo',fmtPct(ctx.costRisk,2),'coins',{detail:'Deterioros anualizados'}),
-  kpi('Provisiones / dudosos*',fmtPct(ctx.coverage),'shield',{detail:'Proxy, no cobertura Stage 3'}),
+  kpi('Cobertura Stage 3',fmtPct(ctx.coverageStage3),'shield',{detail:'Provisión específica / dudosos'}),
   kpi('Stage 2',fmtPct(ctx.stage2,2),'layers',{detail:'Sobre exposición'}),
   kpi('Stage 3',fmtPct(ratio(r.doubtful,r.exposure),2),'alert',{detail:'Dudosos / exposición'}),
-  kpi('Provisiones',fmtM(r.provisions),'wallet',{detail:'Saldo de cierre'}),
+  kpi('Provisiones S1+S2+S3',fmtM(r.provisions),'wallet',{detail:'Reservas contables simuladas'}),
   kpi('Exposición crediticia',fmtM(r.exposure),'credit',{detail:'Cartera a cierre'}),
   kpi('Deterioros del periodo',fmtM(s.impairment),'activity',{detail:'Gasto por deterioro'})].join('');
  return `<div class="kpi-grid">${kpis}</div><div class="dash-grid">
  ${panel('Evolución de la morosidad','Ratio NPL de cierre por segmento (%)',svgLine(ctx.months.map(m=>MONTHS[m-1]),riskSeries,{valueFmt:v=>fmtPct(v),tickFmt:v=>fmtPct(v),lastLabels:false}),{icon:'chart'})}
  ${panel('Mora por región y producto','Mapa de calor de ratios NPL (%)',regionRiskHeat(ctx),{icon:'table',foot:'Los tonos más intensos corresponden a mayor mora.'})}
  ${panel('Exposición por rating crediticio','Distribución del riesgo clasificado (M€)',horizontalBars(gradeVals,{format:fmtM}),{icon:'chart',foot:'Muestra de exposición clasificada de la tabla de rating.'})}
- ${panel('Dudosos y provisiones','Saldos de cierre por mes (M€)',svgLine(ctx.months.map(m=>MONTHS[m-1]),[{name:'Saldo dudoso',values:doubtful,color:'#0e62cc'},{name:'Provisiones',values:provisions,color:'#36c5a0'}],{valueFmt:v=>fmtInt(v),lastLabels:false}),{icon:'activity'})}
- ${panel('Rentabilidad frente a riesgo','Comparación de segmentos: NPL vs. ROE (incluidas pérdidas)',scatter(segs.map((p,i)=>({x:p.risk,y:p.roe,label:p.label,segment:p.id,color:COLORS[i]})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)),{xLabel:'Ratio NPL (%)',yLabel:'ROE (%)'}),{icon:'scatter',foot:'Los puntos rojos indican ROE negativo; son valores reales del modelo simulado, no ceros.'})}
- ${panel('Sectores bajo vigilancia','Exposición crediticia por riesgo estimado',simpleTable(['Sector','Exposición','NPL','Provisiones/dudosos*','Nivel'],watchRows),{icon:'alert',foot:'* Provisiones totales / dudosos es una aproximación; falta provisión específica Stage 3 para estimar cobertura regulatoria.'})}
+ ${panel('Dudosos y provisiones','Dudosos y reservas contables Stage 1+2+3 (M€)',svgLine(ctx.months.map(m=>MONTHS[m-1]),[{name:'Saldo dudoso',values:doubtful,color:'#0e62cc'},{name:'Provisiones',values:provisions,color:'#36c5a0'}],{valueFmt:v=>fmtInt(v),lastLabels:false}),{icon:'activity'})}
+ ${panel('Rentabilidad frente a riesgo','Comparación de segmentos: NPL frente a ROE, con transfer pricing v7',scatter(segs.map((p,i)=>({x:p.risk,y:p.roe,label:p.label,segment:p.id,color:COLORS[i]})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)),{xLabel:'Ratio NPL (%)',yLabel:'ROE (%)'}),{icon:'scatter',foot:'La leyenda identifica el segmento y su coordenada exacta. El ROE se calcula con el patrimonio asignado; v7 revisa los costes internos de financiación.'})}
+ ${panel('Sectores bajo vigilancia','Exposición crediticia por riesgo estimado',simpleTable(['Sector','Exposición','NPL','Reservas/dudosos*','Nivel'],watchRows),{icon:'alert',foot:'* La muestra independiente de rating no reconcilia con toda la cartera: reservas / dudosos es solo una proxy en esa muestra.'})}
+ ${panel('Provisiones por fase IFRS 9 · simulación','Reservas y exposiciones por Stage (M€)',`<div class="risk-stage-cards">${[['Stage 1',ctx.stage.s1,ctx.stage.p1],['Stage 2',ctx.stage.s2,ctx.stage.p2],['Stage 3',ctx.stage.s3,ctx.stage.p3]].map(([n,exp,prov])=>`<div><strong>${n}</strong><span>Exposición ${fmtM(exp,1)}</span><span>Provisión ${fmtM(prov,1)}</span><b>Tasa ${fmtPct(ratio(prov,exp),2)}</b></div>`).join('')}</div><div class="stage-recon">Σ reservas por fase ${fmtM(ctx.stage.p1+ctx.stage.p2+ctx.stage.p3,1)} · saldo de provisiones ${fmtM(ctx.stock.provisions,1)} · diferencia ${fmtM(ctx.stock.provisions-ctx.stage.p1-ctx.stage.p2-ctx.stage.p3,2)}</div>`,{icon:'shield',class:'full',foot:'Stage 1+2+3 exclusivos. Las tasas y reservas corresponden a escenarios ECL sintéticos, no a estados regulatorios reales.'})}
  </div>`
 }
 function liquidityPage(ctx){
@@ -558,14 +617,16 @@ function clientsPage(ctx){
 function officesPage(ctx){
  const scores=officeScores(ctx),activeOffices=ctx.officeClosing.length,managers=sum(ctx.officeClosing,2),assets=sum(ctx.officeClosing,7);
  const lending=ctx.stock.credits,deposits=ctx.stock.deposits,localIncome=sum(ctx.officeFlows,8),localCosts=sum(ctx.officeFlows,5),satisfaction=ratio(total(ctx.officeClosing,r=>r[3]*r[4]),sum(ctx.officeClosing,3),1),
-   productivity=ratio(localIncome*1000,sum(ctx.officeFlows,2),1);
+   productivity=ratio(ctx.officeFlows.reduce((t,r)=>t+(F.officeAttribution?.get(`${r[0]}-${r[1]}`)?.[2]??r[8]*.157),0)*1000,sum(ctx.officeFlows,2),1);
+ const attributed=sum(ctx.officeFlows.map(r=>[r[0],r[1],F.officeAttribution?.get(`${r[0]}-${r[1]}`)?.[2]??r[8]*.157]),2);
+ const fte=sum(ctx.officeClosing.map(r=>[r[0],r[1],F.officeAttribution?.get(`${r[0]}-${r[1]}`)?.[3]??Math.round(r[7]/14.5)]),2);
  const kpis=[
   kpi('Oficinas activas',fmtInt(activeOffices),'building',{detail:'Red al cierre'}),
   kpi('Gestores comerciales',fmtInt(managers),'users',{detail:'Plantilla al cierre'}),
-  kpi('Activos por oficina',fmtM(assets/Math.max(1,activeOffices),1),'coins',{detail:'Media de cierre'}),
+  kpi('FTE asignados',fmtInt(fte),'users',{detail:'Incluye soporte operativo'}),
   kpi('Depósitos por oficina',fmtM(deposits/Math.max(1,activeOffices),1),'wallet',{detail:'Media de cierre'}),
   kpi('Créditos por oficina',fmtM(lending/Math.max(1,activeOffices),1),'credit',{detail:'Media de cierre'}),
-  kpi('Productividad gestor-mes',fmtK(productivity),'target',{detail:'Ingresos / suma gestores-mes'}),
+  kpi('Productividad atribuida',fmtK(productivity),'target',{detail:'Ingresos atribuibles / gestores-mes'}),
   kpi('Gasto local',fmtM(localCosts),'layers',{detail:'Total del periodo'}),
   kpi('Satisfacción',`${fmt2or1(satisfaction)} / 10`,'check',{detail:'Media ponderada'})].join('');
  const top=scores.slice(0,8),ranking=top.map(s=>({label:s.name,value:s.income}));
@@ -576,18 +637,18 @@ function officesPage(ctx){
  const regionTiles=`<div class="region-tiles">${regionList.map((r,i)=>`<div class="region-tile" data-region="${r.id}"><div class="stripe" style="background:${COLORS[i]}"></div><strong>${safe(r.name)}</strong><div class="num">${fmtInt(r.count)}</div><span>oficinas · ${fmtPct(ratio(r.count,156))} de la red</span></div>`).join('')}</div>`;
  const heatRows=top.slice(0,6),quarters=[1,2,3,4],heatValues=heatRows.map(o=>quarters.map(q=>{
   const subset=ctx.officeRows.filter(r=>r[1]===o.id&&Math.ceil(r[0]/3)===q&&ctx.includes(r[0]));
-  return ratio(sum(subset,8)*1000,sum(subset,2),1)
+  return ratio(subset.reduce((t,r)=>t+(F.officeAttribution?.get(`${r[0]}-${r[1]}`)?.[2]??r[8]*.157),0)*1000,sum(subset,2),1)
  }));
  // This heatmap displays productivity in k€ per gestor, not percentages.
  const heatMin=Math.min(...heatValues.flat().filter(Number.isFinite),0),heatMax=Math.max(...heatValues.flat().filter(Number.isFinite),1);
  const customHeat=`<table class="heat-table"><thead><tr><th>Oficina</th>${quarters.map(q=>`<th>T${q}</th>`).join('')}</tr></thead><tbody>${heatRows.map((o,i)=>`<tr><td>${safe(o.name)}</td>${heatValues[i].map(v=>{const t=clamp((v-heatMin)/Math.max(1,heatMax-heatMin),0,1),bg=`rgba(${Math.round(214-164*t)},${Math.round(248-100*t)},${Math.round(226-25*t)},.86)`;return `<td style="background:${bg};color:${t>.7?'white':'#244e67'}">${fmt1(v)}</td>`}).join('')}</tr>`).join('')}</tbody></table><div class="heat-legend"><span>Menor productividad</span><span class="heat-gradient"></span><span>Mayor productividad</span></div>`;
  const scatterPoints=scores.slice(0,12).filter(o=>Number.isFinite(o.efficiency)&&Number.isFinite(o.productivity)).map((o,i)=>({x:o.efficiency,y:o.productivity,label:o.name.replace(' Comercial','').replace(' Centro',''),color:COLORS[i%COLORS.length]}));
  return `<div class="kpi-grid">${kpis}</div><div class="dash-grid">
- ${panel('Ranking de oficinas','Ingresos comerciales acumulados (M€)',horizontalBars(ranking,{format:v=>fmtM(v,1)}),{icon:'chart'})}
+ ${panel('Ranking de oficinas','Ingresos bancarios brutos acumulados (M€)',horizontalBars(ranking,{format:v=>fmtM(v,1)}),{icon:'chart'})}
  ${panel('Distribución territorial de la red','Número de oficinas por región',regionTiles,{icon:'map',foot:'Selecciona una región para filtrar el cuadro de mando.'})}
  ${panel('Créditos y depósitos por región','Saldos bancarios al cierre (M€)',barChart(regions.map(id=>F.regions.get(id)?.[1]||''),[{name:'Créditos',values:regionCredit,color:'#0b64d2'},{name:'Depósitos',values:regionDeposit,color:'#15b9d0'}],{tickFmt:fmtInt}),{icon:'coins'})}
- ${panel('Productividad por oficina y trimestre','Ingresos brutos por gestor-mes (k€)',customHeat,{icon:'table'})}
- ${panel('Productividad vs. gasto comercial','Ingresos brutos por gestor-mes (k€) y gasto comercial / ingresos brutos (%)',scatter(scatterPoints,{xLabel:'Gasto comercial / ingresos (%)',yLabel:'Productividad (k€)',yFmt:v=>fmt1(v)+' k€'}),{icon:'scatter',foot:'Los marcadores coincidentes se separan visualmente con una línea punteada; el valor exacto está en el tooltip. Gasto comercial local / ingreso bruto, no eficiencia bancaria de PyG.'})}
+ ${panel('Productividad por oficina y trimestre','Ingresos comerciales atribuibles / gestor-mes (k€)',customHeat,{icon:'table'})}
+ ${panel('Productividad vs. gasto comercial','Ingresos atribuibles / gestor-mes (k€) vs. gasto local / ingresos brutos (%)',scatter(scatterPoints,{xLabel:'Gasto comercial / ingresos (%)',yLabel:'Productividad (k€)',yFmt:v=>fmt1(v)+' k€'}),{icon:'scatter',foot:'Los marcadores coincidentes se separan visualmente con una línea punteada; el valor exacto está en el tooltip. Gasto comercial local / ingreso bruto, no eficiencia bancaria de PyG.'})}
  ${panel('Detalle de las principales oficinas','Indicadores de gestión y satisfacción',renderOfficeTable(ctx,10),{icon:'building',foot:'Clic sobre una oficina para filtrar todas las vistas compatibles.'})}
  </div>`
 }
@@ -610,7 +671,7 @@ function filterScope(){const parts=[];
  if(state.segment!=='all')parts.push('Segmento: cartera, resultados y clientes');
  if(state.channel!=='all')parts.push('Canal: captación comercial');
  if(state.office!=='all')parts.push('Oficina: ratios regulatorios referidos a su región');
- if(!parts.length)parts.push('Cada visual utiliza la granularidad disponible en el Excel original');
+ if(!parts.length)parts.push('Fuentes: Excel original, calibración de oficinas v4 y escenarios de riesgo/financiación/personal v7');
  return `<div class="data-scope"><span class="scope-info">${icon('info')} ${safe(parts[0])}</span>${parts.slice(1).map(s=>`<span class="scope-divider"></span><span>${safe(s)}</span>`).join('')}</div>`
 }
 function renderPageTabs(){return `<nav class="page-tabs" aria-label="Pestañas del informe">${PAGES.map(p=>`<button type="button" class="page-tab ${state.page===p.id?'active':''}" data-page="${p.id}">${icon(p.icon)} ${safe(p.label)}</button>`).join('')}</nav>`}
@@ -622,7 +683,7 @@ function render(){
  <header class="header"><div class="heading"><span class="heading-mark">${icon('chart','icon-lg')}</span><div><h1>Panel de Control Financiero Bancario</h1><p>${safe(breadcrumb())} <span class="muted">· Ejercicio 2024</span></p></div></div><div class="top-right"><span class="simulation-pill"><span class="sim-dot"></span> Datos 100 % simulados</span><span class="update-pill">${icon('calendar','icon-sm')} Corte: ${safe(MONTHS[ctx.month-1])} 2024</span><button class="icon-btn" type="button" data-action="reset" title="Restablecer filtros">${icon('refresh','icon-sm')} Restablecer</button><button class="icon-btn" type="button" data-action="csv" title="Exportar datos filtrados">${icon('download','icon-sm')} CSV</button></div></header>
  ${renderPageTabs()}${renderFilters()}${filterScope()}<div class="section-eyebrow">VISIÓN ANALÍTICA <span></span> ${safe(breadcrumb().toUpperCase())}</div>
  ${PAGE_RENDERERS[state.page](ctx)}
- <footer class="footer"><span><strong>BankVision v5 / Banking Analytics</strong> · 300.053 registros originales + calibración de oficinas v4 · Importes en millones de euros salvo indicación</span><span>Datos sintéticos · 2024 · Diseñado para portfolio profesional</span></footer>
+ <footer class="footer"><span><strong>BankVision v7 / Banking Analytics</strong> · 300.053 registros originales + recalibraciones v4 y v7 · Importes en millones de euros salvo indicación</span><span>Datos sintéticos · 2024 · Diseñado para portfolio profesional</span></footer>
  </main></div>`;
  document.title=`BankVision · ${breadcrumb()}`;
 }

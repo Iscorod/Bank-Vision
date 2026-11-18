@@ -73,3 +73,51 @@
 @media(max-width:1160px){.executive-funnel-panel,.executive-office-panel{min-height:370px}.product-scroll-region{max-height:260px}}
 @media(max-width:790px){.executive-funnel-panel,.executive-office-panel{min-height:390px}.product-scroll-region{max-height:330px}}
 @media(max-width:430px){.product-controls{grid-template-columns:1fr}.funnel-expanded .funnel-body{grid-template-columns:52% minmax(0,1fr);gap:8px}.funnel-expanded .funnel-step{font-size:10px}.funnel-expanded .funnel-step b{font-size:12px}.funnel-conversion-total strong{font-size:15px}}
+
+/* BankVision v6 · embudo centrado de verdad, etapas y métricas alineadas */
+.executive-funnel-panel .panel-body{display:flex;flex-direction:column;justify-content:center;align-items:stretch;flex:1;min-height:0}
+.executive-funnel-panel .funnel-layout.funnel-expanded{display:flex;flex:0 0 auto;flex-direction:column;justify-content:center;width:100%;max-width:760px;min-height:0;margin:auto;gap:14px}
+.executive-funnel-panel .funnel-expanded .funnel-body{display:grid;flex:0 0 auto;grid-template-columns:minmax(0,54%) minmax(0,1fr);gap:14px;align-items:stretch;height:clamp(210px,18vw,260px);min-height:0;padding:0}
+.executive-funnel-panel .funnel-expanded .funnel-shapes,.executive-funnel-panel .funnel-expanded .funnel-steps{height:100%;display:grid;grid-template-rows:repeat(4,minmax(0,1fr));gap:7px;min-height:0;padding:0}
+.executive-funnel-panel .funnel-expanded .funnel-stage{height:100%;min-height:0;max-height:none;display:grid;place-items:center;font-size:clamp(13px,1.1vw,18px)}
+.executive-funnel-panel .funnel-expanded .funnel-step{align-self:stretch;align-content:center;min-height:0;grid-template-columns:9px minmax(0,1fr);gap:2px 7px;padding:0}
+.executive-funnel-panel .funnel-conversion-total{flex:0 0 auto}
+/* Auditoría de ROE: capital que pondera cada punto y puente de márgenes visibles. */
+.finance-breakdown{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 14px}
+.finance-breakdown>div{display:flex;flex-direction:column;justify-content:center;gap:4px;background:#f8fbff;border:1px solid #dbeaf7;border-radius:10px;padding:10px 12px;min-width:0}
+.finance-breakdown span{font-size:10px;line-height:1.2;font-weight:700;color:#637d9a}
+.finance-breakdown strong{font-family:Manrope,Arial,sans-serif;color:#164779;font-size:13px;font-weight:800;overflow-wrap:anywhere}
+.scatter-key-item{display:grid;grid-template-columns:17px minmax(0,1fr);grid-template-rows:auto auto auto;gap:3px 6px;align-items:center;min-width:0}
+.scatter-key-item .scatter-key-marker{grid-column:1;grid-row:1 / 4;align-self:start}
+.scatter-key-item span{grid-column:2;grid-row:1;min-width:0;white-space:normal;overflow:visible;line-height:1.2}
+.scatter-key-item small{grid-column:2;grid-row:2;font-size:9px;white-space:normal}
+.scatter-key-item em{grid-column:2;grid-row:3;color:#0b7795;font-style:normal;font-size:9px;font-weight:700;overflow-wrap:anywhere}
+.roe-reconciliation{display:flex;flex-wrap:wrap;gap:5px 9px;align-items:center;font-size:10px;color:#58718f;border-top:1px solid #e7eff7;padding:8px 3px}
+.roe-reconciliation strong{color:#124d81;font-weight:800}
+.segment-details{border-top:1px dashed #dceaf5;padding-top:4px}
+.segment-details summary{font-size:10px;font-weight:800;color:#0b75b4;cursor:pointer;padding:5px 3px;outline-offset:2px}
+.segment-details .tbl-wrap{margin-top:7px;max-height:270px;overflow:auto}
+.segment-details .data-table{font-size:9px;min-width:760px}
+.segment-details .data-table td,.segment-details .data-table th{padding:8px 6px}
+.segment-details-note{font-size:9px;line-height:1.5;color:#617c97;margin:8px 4px}
+@media(max-width:1160px){.finance-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}.executive-funnel-panel .funnel-expanded .funnel-body{height:clamp(210px,26vw,268px)}}
+@media(max-width:650px){.finance-breakdown{grid-template-columns:1fr 1fr;gap:7px}.finance-breakdown>div{padding:8px}.finance-breakdown strong{font-size:11px}.executive-funnel-panel .funnel-expanded .funnel-body{grid-template-columns:minmax(0,52%) minmax(0,1fr);gap:8px;height:clamp(210px,57vw,250px)}.executive-funnel-panel .funnel-expanded .funnel-stage{font-size:12px}.executive-funnel-panel .funnel-expanded .funnel-step{font-size:10px}.executive-funnel-panel .funnel-expanded .funnel-step b{font-size:12px}}
+
+/* v7 · reconciled risk, fee margins, income attribution and real-size legend */
+.finance-breakdown{grid-template-columns:repeat(3,minmax(0,1fr))}
+.finance-breakdown small{font-size:9px;color:#7288a2;font-weight:600}
+.capital-bridge-note{background:#f8fcff;border:1px solid #dce9f7;border-radius:10px;padding:8px 12px;margin:-6px 0 14px;color:#496580;font-size:11px;line-height:1.45}
+.capital-bridge-note summary{font-weight:800;color:#0a6cb7;cursor:pointer}
+.capital-bridge-note p{margin:7px 0 0}
+.scatter-key-above{margin:2px 0 7px;border-top:0;border-bottom:1px solid #e6eff7;padding:2px 0 8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.scatter-key-above .scatter-key-item{background:#f7fbff;border:1px solid #edf3f9;padding:5px 7px}
+.scatter-key-above .scatter-key-item em{font-size:10px;color:#186c9e}
+.risk-stage-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.risk-stage-cards>div{display:flex;flex-direction:column;gap:8px;padding:17px;border-radius:12px;border:1px solid #dfeaf7;background:#f7fbff}
+.risk-stage-cards strong{font-size:14px;color:#105eb6}
+.risk-stage-cards span{color:#4b617d;font-size:12px}
+.risk-stage-cards b{color:#0c6577;font-size:14px}
+.stage-recon{margin-top:12px;background:#ecf9f4;color:#1f7864;padding:12px;border-radius:9px;font-size:11px;font-weight:700}
+.executive-office-layout .data-table{min-width:820px}
+@media(max-width:1160px){.finance-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.finance-breakdown{grid-template-columns:1fr 1fr}.risk-stage-cards{grid-template-columns:1fr}.scatter-key-above{grid-template-columns:1fr}}
